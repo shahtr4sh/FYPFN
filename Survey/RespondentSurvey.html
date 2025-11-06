@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCEAN Personality and Cognitive Traits Survey System</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+
+        /* --- CUSTOM CSS FOR STICKY COLUMN FIX --- */
+        /* Ensure the sticky data cell background is solid white and layered correctly */
+        .sticky-column-id {
+            position: sticky;
+            left: 0;
+            z-index: 20; /* High layer to cover scrolling content */
+            background-color: white !important; /* Force white background */
+            /* Tailwind classes like px-3 py-3 and text-sm will be applied in JS/HTML */
+        }
+        
+        /* Ensure the sticky header background is solid blue-50 */
+        .sticky-header-id {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background-color: #EFF6FF !important; /* Tailwind bg-blue-50 color */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+
+    <div id="app" class="max-w-7xl mx-auto">
+        <header class="text-center mb-10 p-6 bg-white shadow-lg rounded-xl">
+            <h1 class="text-4xl font-extrabold text-blue-800 tracking-tight">Personality & Cognitive Profiler</h1>
+            <p class="mt-2 text-lg text-gray-600">Please answer all statements using the Likert scale to complete your full profile.</p>
+        </header>
+
+        <!-- Main Content Area: Survey and Results -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <!-- Survey Form Panel (2/3 width on large screens) -->
+            <div class="lg:col-span-2 p-6 bg-white shadow-xl rounded-xl">
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800 border-b pb-3">Respondent Survey</h2>
+                
+                <form id="ocean-form">
+                    <!-- Loading state for the form -->
+                    <div id="loading-questions" class="text-center py-10 text-gray-500 font-medium hidden">Loading survey...</div>
+
+                    <!-- OCEAN Questions Container -->
+                    <h3 class="text-xl font-bold text-gray-700 mt-6 mb-4 p-2 bg-blue-50 rounded-lg">Part 1: The Big Five (OCEAN)</h3>
+                    <div id="ocean-questions-container" class="space-y-6">
+                        <!-- OCEAN Question blocks -->
+                    </div>
+                    
+                    <!-- Cognitive Questions Container -->
+                    <h3 class="text-xl font-bold text-gray-700 mt-10 mb-4 p-2 bg-blue-50 rounded-lg">Part 2: Cognitive & Response Traits</h3>
+                    <div id="cognitive-questions-container" class="space-y-6">
+                        <!-- Cognitive Question blocks -->
+                    </div>
+
+                    <div id="form-messages" class="mt-4 text-center p-3 rounded-lg hidden"></div>
+
+                    <button type="submit" id="submit-btn" class="mt-8 w-full px-6 py-3 bg-blue-600 text-white font-bold text-lg rounded-lg shadow-md hover:bg-blue-700 transition duration-200 disabled:opacity-50" disabled>
+                        Submit All Results
+                    </button>
+                </form>
+            </div>
+
+            <!-- Results Panel (1/3 width on large screens) -->
+            <div class="lg:col-span-1 p-6 bg-white shadow-xl rounded-xl h-fit sticky top-8">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 border-b pb-3">Your Profile</h2>
+                <div id="result-display" class="space-y-3 text-gray-700">
+                    <p class="text-sm italic">Submit the survey to see your personalized 12-factor scores here.</p>
+                </div>
+
+                <div id="auth-status" class="mt-6 text-xs text-gray-400 border-t pt-3">
+                    <!-- User ID displayed here for public sharing -->
+                </div>
+            </div>
+        </div>
+
+        <!-- "Excel Sheet" - Full Respondent List Table -->
+        <div class="mt-12 p-6 bg-white shadow-xl rounded-xl overflow-x-auto">
+            
+            <!-- NEW FLEX CONTAINER FOR TITLE AND BUTTON -->
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 text-gray-800 border-b pb-3">
+                <h2 class="text-2xl font-semibold mb-2 sm:mb-0">All Respondent Data (The "Excel File")</h2>
+                <button id="download-csv-btn" class="text-sm px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow-md hover:bg-green-700 transition disabled:opacity-50" disabled>
+                    Download Respondent_profiles.csv
+                </button>
+            </div>
+
+            <p class="text-sm text-gray-500 mb-4">This table shows all collected results in real-time, matching the desired 12-column output format.</p>
+
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-blue-50">
+                    <tr>
+                        <!-- Applied new sticky-header-id class -->
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider sticky-header-id">ID</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Openness</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Conscientiousness</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Extraversion</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Agreeableness</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Neuroticism</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Impulsiveness</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Sensitivity</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Conf. Bias</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Trust Level</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Susceptibility</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Crit. Thinking</th>
+                        <th class="px-3 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Fact Check</th>
+                    </tr>
+                </thead>
+                <tbody id="results-table-body" class="bg-white divide-y divide-gray-100">
+                    <tr id="loading-row"><td colspan="13" class="px-3 py-4 text-sm text-gray-500 text-center">Loading data from the cloud...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, setDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: Global variables for Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth;
+        let userId = null;
+        let isAuthReady = false;
+        let isDbReady = false;
+        let currentResults = []; // Global array to store fetched results for CSV export
+
+        const resultsTableBody = document.getElementById('results-table-body');
+        const formMessages = document.getElementById('form-messages');
+        const submitBtn = document.getElementById('submit-btn');
+        const loadingQuestions = document.getElementById('loading-questions');
+        const downloadBtn = document.getElementById('download-csv-btn');
+
+        // Questions and their scoring direction (1=Normal, -1=Reverse)
+        // Scores are based on a 5-point Likert scale (1=Strongly Disagree to 5=Strongly Agree)
+        const questions = [
+            // --- Part 1: OCEAN Personality (O, C, E, A, N) - 10 questions ---
+            { id: 'O1', group: 'ocean', trait: 'openness', text: "I have a rich vocabulary.", direction: 1 },
+            { id: 'O2', group: 'ocean', trait: 'openness', text: "I prefer routine over variety.", direction: -1 },
+
+            { id: 'C1', group: 'ocean', trait: 'conscientiousness', text: "I pay attention to details.", direction: 1 },
+            { id: 'C2', group: 'ocean', trait: 'conscientiousness', text: "I often forget to put things back in their proper place.", direction: -1 },
+
+            { id: 'E1', group: 'ocean', trait: 'extraversion', text: "I am the life of the party.", direction: 1 },
+            { id: 'E2', group: 'ocean', trait: 'extraversion', text: "I am quiet around strangers.", direction: -1 },
+
+            { id: 'A1', group: 'ocean', trait: 'agreeableness', text: "I sympathize with others' feelings.", direction: 1 },
+            { id: 'A2', group: 'ocean', trait: 'agreeableness', text: "I am not interested in other people's problems.", direction: -1 },
+
+            { id: 'N1', group: 'ocean', trait: 'neuroticism', text: "I worry about things.", direction: 1 },
+            { id: 'N2', group: 'ocean', trait: 'neuroticism', text: "I am calm in tense situations.", direction: -1 },
+
+            // --- Part 2: Cognitive & Response Traits - 7 questions ---
+            // Impulsiveness
+            { id: 'I1', group: 'cognitive', trait: 'impulsiveness', text: "I often make decisions on the spur of the moment without much thought.", direction: 1 },
+            
+            // Emotional Sensitivity
+            { id: 'S1', group: 'cognitive', trait: 'sensitivity', text: "My feelings are easily hurt by criticism or harsh words.", direction: 1 },
+
+            // Confirmation Bias (Used for Skepticism/Belief Threshold context)
+            { id: 'CB1', group: 'cognitive', trait: 'confirmation_bias', text: "When researching a topic, I usually look for sources that support what I already believe.", direction: 1 },
+
+            // Trust Level (Used for Belief Threshold)
+            { id: 'T1', group: 'cognitive', trait: 'trust_level', text: "I generally trust information from unfamiliar sources unless I see immediate proof to the contrary.", direction: 1 },
+
+            // Emotional Susceptibility
+            { id: 'ES1', group: 'cognitive', trait: 'emotional_susceptibility', text: "I find myself easily persuaded by information that strongly appeals to my emotions (fear, anger, sympathy).", direction: 1 },
+
+            // Critical Thinking
+            { id: 'CT1', group: 'cognitive', trait: 'critical_thinking', text: "I always analyze and verify information from multiple independent sources before accepting it as true.", direction: 1 },
+
+            // Compliance of Fact Check Signal
+            { id: 'FC1', group: 'cognitive', trait: 'fact_check_signal', text: "If a credible, official fact-check source contradicted a piece of news I read, I would immediately reject the news.", direction: 1 },
+        ];
+        
+        // --- Utility Functions ---
+
+        /**
+         * Exponential backoff for retrying API calls (e.g., Firestore operations).
+         * @param {function} fn The function to execute.
+         * @param {number} retries The current retry count (start at 0).
+         * @param {number} delay The initial delay in ms.
+         */
+        const withExponentialBackoff = async (fn, retries = 0, delay = 1000) => {
+            try {
+                return await fn();
+            } catch (error) {
+                if (retries < 5) { // Max 5 retries
+                    const nextDelay = delay * Math.pow(2, retries) + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, nextDelay));
+                    return withExponentialBackoff(fn, retries + 1, delay);
+                } else {
+                    console.error("Operation failed after multiple retries:", error);
+                    throw error;
+                }
+            }
+        };
+
+
+        /**
+         * Renders the survey questions dynamically into their respective containers.
+         */
+        function renderQuestions() {
+            const oceanContainer = document.getElementById('ocean-questions-container');
+            const cognitiveContainer = document.getElementById('cognitive-questions-container');
+            
+            oceanContainer.innerHTML = '';
+            cognitiveContainer.innerHTML = '';
+            
+            questions.forEach((q, index) => {
+                const targetContainer = q.group === 'ocean' ? oceanContainer : cognitiveContainer;
+                
+                const qDiv = document.createElement('div');
+                qDiv.className = 'p-4 border border-gray-200 rounded-lg bg-gray-50 hover:shadow-sm transition';
+                
+                // Determine the starting index for display purposes
+                const displayIndex = index + 1;
+
+                qDiv.innerHTML = `
+                    <p class="font-medium text-gray-700 mb-3">${displayIndex}. ${q.text}</p>
+                    <div class="flex flex-col sm:flex-row justify-between text-sm space-y-2 sm:space-y-0 sm:space-x-2">
+                        ${[1, 2, 3, 4, 5].map(val => `
+                            <label class="flex items-center space-x-2 p-2 bg-white rounded-md border hover:bg-blue-50 cursor-pointer transition flex-grow justify-center">
+                                <input type="radio" name="${q.id}" value="${val}" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                                <span class="text-gray-600">${
+                                    val === 1 ? 'Strongly Disagree' :
+                                    val === 2 ? 'Disagree' :
+                                    val === 3 ? 'Neutral' :
+                                    val === 4 ? 'Agree' :
+                                    'Strongly Agree'
+                                }</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+                targetContainer.appendChild(qDiv);
+            });
+            loadingQuestions.classList.add('hidden');
+            submitBtn.disabled = false;
+        }
+
+        /**
+         * Calculates all 12 scores from form data.
+         * @param {FormData} data The form data object.
+         * @returns {Object} The normalized 12 scores.
+         */
+        function calculateScores(data) {
+            // Initialize scores and counts for all 12 traits
+            const allTraits = [
+                'openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism',
+                'impulsiveness', 'sensitivity', 'confirmation_bias', 'trust_level', 
+                'emotional_susceptibility', 'critical_thinking', 'fact_check_signal'
+            ];
+
+            const scores = Object.fromEntries(allTraits.map(trait => [trait, 0]));
+            const counts = Object.fromEntries(allTraits.map(trait => [trait, 0]));
+            
+            questions.forEach(q => {
+                const answer = data.get(q.id);
+                if (answer) {
+                    const rawValue = parseInt(answer, 10);
+                    let score = rawValue;
+
+                    // Reverse scoring for reversed items
+                    if (q.direction === -1) {
+                        score = 6 - rawValue; // 1->5, 2->4, 3->3, 4->2, 5->1
+                    }
+
+                    scores[q.trait] += score;
+                    counts[q.trait] += 1;
+                }
+            });
+
+            const normalizedScores = {};
+            const minScore = 1;
+            const maxScore = 5;
+
+            // Normalize scores to a 0.0 to 1.0 range (matching CSV format)
+            for (const trait of allTraits) {
+                if (counts[trait] > 0) {
+                    const averageScore = scores[trait] / counts[trait];
+                    
+                    // Normalize the average score from [1, 5] to [0.0, 1.0]
+                    const normalized = (averageScore - minScore) / (maxScore - minScore);
+                    normalizedScores[trait] = parseFloat(normalized.toFixed(4));
+                } else {
+                    normalizedScores[trait] = 0.0000;
+                }
+            }
+
+            return normalizedScores;
+        }
+
+        /**
+         * Displays the calculated scores in the side panel.
+         * @param {Object} scores The normalized 12 scores.
+         */
+        function displayResults(scores) {
+            const display = document.getElementById('result-display');
+            display.innerHTML = `
+                ${Object.entries(scores).map(([trait, score]) => `
+                    <div class="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
+                        <span class="capitalize font-semibold text-blue-800">${trait.replace(/_/g, ' ')}:</span>
+                        <div class="relative w-2/3 h-4 bg-gray-200 rounded-full">
+                            <div class="h-full bg-blue-400 rounded-full transition-all duration-500" style="width: ${score * 100}%"></div>
+                            <span class="absolute right-0 -top-6 text-sm font-mono text-gray-700">${score.toFixed(4)}</span>
+                        </div>
+                    </div>
+                `).join('')}
+                <p class="pt-4 text-sm text-gray-500">Your results have been successfully recorded in the main data set below.</p>
+            `;
+        }
+
+        // --- Firebase/Firestore Logic ---
+
+        /**
+         * Initializes Firebase and authenticates the user.
+         */
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                console.error("Firebase config not available.");
+                formMessages.textContent = "Error: Firebase configuration is missing. Cannot save data.";
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-red-100 text-red-700';
+                return;
+            }
+            
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); // Enable debug logging for Firestore
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    isAuthReady = true;
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('auth-status').innerHTML = `<span class="font-semibold text-gray-700">User ID:</span> ${userId}`;
+                        isDbReady = true;
+                        // Start listening for data once authenticated
+                        listenForResults();
+                    } else {
+                        userId = null;
+                        document.getElementById('auth-status').textContent = 'Signed out/Anonymous.';
+                        isDbReady = true;
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization or authentication failed:", error);
+                formMessages.textContent = `Authentication Error: ${error.message}`;
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-red-100 text-red-700';
+            }
+        }
+
+        /**
+         * Saves the calculated scores to Firestore.
+         * @param {Object} scores The normalized 12 scores.
+         */
+        async function saveResult(scores) {
+            if (!isDbReady || !db) {
+                console.error("Database is not ready.");
+                return;
+            }
+
+            const collectionPath = `artifacts/${appId}/public/data/agent_profiles`; // Renamed collection for clarity
+            const resultsCollection = collection(db, collectionPath);
+            
+            try {
+                // Prepare the document to save
+                const resultDoc = {
+                    agent_id: userId || crypto.randomUUID(), // Use UID or a random ID
+                    timestamp: serverTimestamp(),
+                    ...scores, // All 12 normalized scores
+                };
+
+                // Use addDoc to create a new document with a generated ID
+                await withExponentialBackoff(() => addDoc(resultsCollection, resultDoc));
+
+                formMessages.textContent = "Success! Your full profile has been saved and added to the list below.";
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-green-100 text-green-700 block';
+                
+            } catch (error) {
+                console.error("Error saving document:", error);
+                formMessages.textContent = `Error saving data: ${error.message}`;
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-red-100 text-red-700 block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit All Results';
+            }
+        }
+
+        /**
+         * Sets up a real-time listener for all results (the "Excel file").
+         */
+        function listenForResults() {
+            if (!isDbReady || !db) return;
+
+            const collectionPath = `artifacts/${appId}/public/data/agent_profiles`;
+            const resultsQuery = query(collection(db, collectionPath));
+
+            onSnapshot(resultsQuery, (snapshot) => {
+                const results = [];
+                snapshot.forEach((doc) => {
+                    // Use the Firestore-generated document ID for the table display ID
+                    results.push({ docId: doc.id, ...doc.data() });
+                });
+
+                // Sort results by timestamp (newest first)
+                results.sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds);
+                
+                // Store results globally for CSV export
+                currentResults = results; 
+
+                // Enable download button if there is data
+                downloadBtn.disabled = currentResults.length === 0;
+
+                // Clear previous rows
+                resultsTableBody.innerHTML = ''; 
+
+                if (results.length === 0) {
+                    resultsTableBody.innerHTML = `<tr><td colspan="13" class="px-3 py-4 text-sm text-gray-500 text-center">No profiles collected yet. Be the first!</td></tr>`;
+                    return;
+                }
+
+                
+                // Define the order of keys for display (must match table headers)
+                const displayKeys = [
+                    'openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism',
+                    'impulsiveness', 'sensitivity', 'confirmation_bias', 'trust_level', 
+                    'emotional_susceptibility', 'critical_thinking', 'fact_check_signal'
+                ];
+
+                // Populate the table
+                results.forEach(result => {
+                    const row = resultsTableBody.insertRow();
+                    row.className = 'hover:bg-gray-50';
+
+                    // 1. Agent ID (or shortened Firestore ID) - Using the new custom class
+                    let rowContent = `<td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 font-mono sticky-column-id hover:bg-gray-50">${(result.agent_id || result.docId).substring(0, 8)}</td>`;
+                    
+                    // 2. All 12 scores
+                    displayKeys.forEach(key => {
+                        const value = (result[key] || 0).toFixed(4);
+                        rowContent += `<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">${value}</td>`;
+                    });
+
+                    row.innerHTML = rowContent;
+                });
+            }, (error) => {
+                console.error("Error listening to collection:", error);
+                resultsTableBody.innerHTML = `<tr><td colspan="13" class="px-3 py-4 text-sm text-red-600 text-center">Error fetching data: ${error.message}</td></tr>`;
+            });
+        }
+        
+        /**
+         * Generates a CSV string from the current results and triggers a download.
+         */
+        function downloadCSV() {
+            if (currentResults.length === 0) {
+                console.warn("No data to download.");
+                return;
+            }
+
+            const headerKeys = [
+                'agent_id', 'openness', 'conscientiousness', 'extraversion', 'agreeableness', 
+                'neuroticism', 'impulsiveness', 'sensitivity', 'confirmation_bias', 
+                'trust_level', 'emotional_susceptibility', 'critical_thinking', 'fact_check_signal'
+            ];
+
+            // 1. Create the header row
+            let csv = headerKeys.join(',') + '\r\n';
+
+            // 2. Create data rows
+            currentResults.forEach(result => {
+                const row = headerKeys.map(key => {
+                    if (key === 'agent_id') {
+                        // Use the full ID stored in the Firestore document
+                        return result.agent_id || result.docId; 
+                    } else {
+                        // All score values are stored as numbers (toFixed(4) was applied on save)
+                        // Ensure they are correctly formatted as strings
+                        return (result[key] || 0.0000).toFixed(4);
+                    }
+                }).join(',');
+                csv += row + '\r\n';
+            });
+
+            // 3. Trigger download
+            const filename = 'Respondent_profiles.csv';
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            
+            // Create a temporary link element
+            const link = document.createElement("a");
+            
+            if (link.download !== undefined) { 
+                // Feature detection for download attribute
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url); // Clean up
+            } else {
+                console.error("The 'download' attribute is not supported by this browser.");
+            }
+        }
+
+
+        // --- Event Listeners and Initialization ---
+
+        document.getElementById('ocean-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            // Basic form validation check (required is handled by HTML, but good to double check)
+            const formData = new FormData(event.target);
+            // Check if all questions are answered
+            if (questions.some(q => !formData.get(q.id))) {
+                formMessages.textContent = "Please answer all 17 questions before submitting.";
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-yellow-100 text-yellow-700 block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Calculating & Saving...';
+            formMessages.classList.add('hidden'); // Hide previous message
+
+            const scores = calculateScores(formData);
+            displayResults(scores);
+            
+            if (isDbReady) {
+                await saveResult(scores);
+            } else {
+                console.error("Database not ready, cannot save scores.");
+                formMessages.textContent = "Database is not ready. Scores calculated but not saved.";
+                formMessages.className = 'mt-4 text-center p-3 rounded-lg bg-red-100 text-red-700 block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit All Results';
+            }
+        });
+
+        // Add listener for the new download button
+        downloadBtn.addEventListener('click', downloadCSV);
+
+        // Initial setup on window load
+        window.onload = function() {
+            loadingQuestions.classList.remove('hidden');
+            renderQuestions();
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>

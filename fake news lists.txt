@@ -1,0 +1,12 @@
+| **Topic**                                                                 | **Suggested Juiciness Score** | **Description / Scenario**         
+                                                        
+| **"University Database Hacked – Student Records for Sale on Dark Web"**   | High                          | Rumor about a data breach causing panic among students about identity theft.               |
+| **"RM5,000 Scholarship Offered – Register Now Using Your UUM ID"**        | High                          | A phishing scam posing as a university grant that tricks students into giving credentials. |
+| **"Emergency VPN Update Required – Failure to Comply Will Block Access"** | Medium-High                   | Triggers urgency; may lead to malware installation if users follow false instructions.     |
+| **"Faculty Email Server Compromised – Urgent Password Reset Needed"**     | High                          | Fake IT support message asking staff to reset passwords through malicious links.           |
+| **"Lecturer Involved in Plagiarism Scandal – Leaked Documents Online"**   | High                          | Rumor-based, harms reputation; triggers strong emotional reactions and sharing.            |
+| **"Campus WiFi is Being Monitored – Use Encrypted Browsers Now"**         | Medium                        | A rumor that nudges students to install proxy tools (which might be fake/malicious).       |
+| **"Fake Exam Timetable Leaked – Verify Before You Fail!"**                | High                          | Targeted at academic anxiety; used to spread panic or malicious PDFs.                      |
+| **"Student Financial Aid Delayed Due to Internal Sabotage"**              | Medium-High                   | Stirring up dissatisfaction and distrust within the university system.                     |
+| **"AI Surveillance in Campus Classrooms – Privacy Rights Violated"**      | Medium                        | Exploits ethical concerns; can ignite protests or mass sharing.                            |
+| **"New COVID-like Virus Detected in Campus – Authorities Silent"**        | Very High                     | Health misinformation still carries strong viral potential and mass response.              |

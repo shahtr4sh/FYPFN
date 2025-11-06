@@ -1,0 +1,28 @@
+{
+  "name": "Fake_Scholarship_Scam",
+  "description": "",
+  "context": "RM5,000 Scholarship Offered \u2013 Register Now Using Your UUM ID",
+  "abm_csv": "Agent_profiles(50).csv",
+  "juiciness": 75,
+  "max_rounds": 24,
+  "intervention_round": 5,
+  "abm_sharing_params": {
+    "share_belief_weight": 4.2,
+    "share_emotional_weight": 1.5,
+    "share_conf_weight": 1.0,
+    "share_juice_weight": 1.0,
+    "share_crit_var": 1.9,
+    "share_offset": -0.9,
+    "attribution_mode": "Weighted by source belief"
+  },
+  "pbm_rates": {
+    "contact_rate": 0.4,
+    "belief_rate": 0.3,
+    "recovery_rate": 0.1,
+    "initial_believers": 5
+  },
+  "advanced_params": {
+    "calibration_multiplier": 3.0
+  },
+  "events": []
+}

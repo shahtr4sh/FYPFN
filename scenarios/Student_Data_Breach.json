@@ -1,0 +1,28 @@
+{
+  "name": "Student_Data_Breach",
+  "description": "",
+  "context": "University Database Hacked \u2013 Student Records for Sale on Dark Web",
+  "abm_csv": "Agent_profiles(50).csv",
+  "juiciness": 98,
+  "max_rounds": 24,
+  "intervention_round": 8,
+  "abm_sharing_params": {
+    "share_belief_weight": 4.5,
+    "share_emotional_weight": 2.0,
+    "share_conf_weight": 1.2,
+    "share_juice_weight": 1.0,
+    "share_crit_var": 1.6,
+    "share_offset": -1.0,
+    "attribution_mode": "Weighted by source belief"
+  },
+  "pbm_rates": {
+    "contact_rate": 0.4,
+    "belief_rate": 0.3,
+    "recovery_rate": 0.1,
+    "initial_believers": 5
+  },
+  "advanced_params": {
+    "calibration_multiplier": 3.0
+  },
+  "events": []
+}
