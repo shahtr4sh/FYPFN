@@ -257,8 +257,6 @@ class FakeNewsSimulatorGUI:
                     'share_emotional_weight': float(self.share_emotion_var.get()),
                     'share_conf_weight': float(self.share_conf_var.get()),
                     'share_juice_weight': float(self.share_juice_var.get()),
-                    'share_crit_var': float(self.share_crit_var.get()),
-                    'share_offset': float(self.share_offset_var.get()),
                     'attribution_mode': self.attribution_var.get()
                 },
                 'pbm_rates': {
@@ -294,6 +292,7 @@ class FakeNewsSimulatorGUI:
             style.theme_use('clam')
         except Exception:
             pass
+        note_font = ('Segoe UI', 9, 'bold')
         default_font = ('Segoe UI', 10)
         heading_font = ('Segoe UI', 11, 'bold')
 
@@ -369,19 +368,16 @@ class FakeNewsSimulatorGUI:
         ttk.Separator(params_frame, orient='horizontal').pack(fill='x', pady=6, padx=6)
 
         # Group: ABM sharing model controls
-        ttk.Label(params_frame, text='Agent-Based Model (ABM) Sharing', font=heading_font).pack(anchor='w', padx=8, pady=(6,4))
+        ttk.Label(params_frame, text='Agent-Based Model (ABM)', font=heading_font).pack(anchor='w', padx=8, pady=(6,4))
+        ttk.Label(params_frame, text='*Higher weights indicate more influence.', font=note_font).pack(anchor='w', padx=8, pady=(1,1))
         self.share_belief_var = tk.DoubleVar(value=4.0)
-        add_scale('Belief influence on sharing', self.share_belief_var, 0.0, 8.0, 0.1)
+        add_scale('Belief Weight', self.share_belief_var, 0.0, 8.0, 0.1)
         self.share_emotion_var = tk.DoubleVar(value=1.5)
-        add_scale('Emotional sensitivity', self.share_emotion_var, 0.0, 4.0, 0.1)
+        add_scale('Emotional Weight', self.share_emotion_var, 0.0, 4.0, 0.1)
         self.share_conf_var = tk.DoubleVar(value=1.0)
-        add_scale('Confirmation bias influence', self.share_conf_var, 0.0, 4.0, 0.1)
+        add_scale('Confirmation Bias Weight', self.share_conf_var, 0.0, 4.0, 0.1)
         self.share_juice_var = tk.DoubleVar(value=1.0)
-        add_scale('Virality (juice) multiplier', self.share_juice_var, 0.0, 3.0, 0.05)
-        self.share_crit_var = tk.DoubleVar(value=2.0)
-        add_scale('Critical thinking penalty', self.share_crit_var, 0.0, 5.0, 0.1)
-        self.share_offset_var = tk.DoubleVar(value=-1.0)
-        add_scale('Sharing baseline offset', self.share_offset_var, -3.0, 3.0, 0.1)
+        add_scale('Virality Multiplier', self.share_juice_var, 0.0, 3.0, 0.05)
 
         ttk.Separator(params_frame, orient='horizontal').pack(fill='x', pady=6, padx=6)
 
@@ -548,15 +544,6 @@ class FakeNewsSimulatorGUI:
             )
             self.round_history.append(abm_result)
             self.abm_results['believer_counts'].append(sum(1 for x in abm_result if x))
-
-       # --- PBM update (independent logistic model) ---
-        beta = 0.8 * (self.juiciness.get() / 100.0) * self._sim_topic_weight  # Spread rate influenced by juiciness
-        gamma = 0.05 + (0.05 if self.intervention else 0.02)  # Decay rate increases with intervention
-        B_t = self.pbm_believers[-1]
-        B_next = B_t + beta * B_t * (1 - B_t) - gamma * B_t  # Logistic diffusion equation
-        B_next = max(0, min(1, B_next))  # Keep value within [0,1]
-        self.pbm_believers.append(B_next)
-        self.pbm_history.append(B_next)
        
         # Run PBM simulation step and update rates if needed
         if self.intervention:
