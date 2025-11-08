@@ -11,8 +11,6 @@
     "share_emotional_weight": 2.0,
     "share_conf_weight": 1.2,
     "share_juice_weight": 1.0,
-    "share_crit_var": 1.6,
-    "share_offset": -1.0,
     "attribution_mode": "Weighted by source belief"
   },
   "pbm_rates": {

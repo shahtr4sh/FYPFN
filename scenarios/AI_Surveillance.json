@@ -1,0 +1,26 @@
+{
+  "name": "AI_Surveillance",
+  "description": "",
+  "context": "AI Surveillance in Campus Classrooms \u2013 Privacy Rights Violated",
+  "abm_csv": "Agent_profiles(50).csv",
+  "juiciness": 75,
+  "max_rounds": 24,
+  "intervention_round": 10,
+  "abm_sharing_params": {
+    "share_belief_weight": 3.44,
+    "share_emotional_weight": 2.04,
+    "share_conf_weight": 1.26,
+    "share_juice_weight": 1.3599999999999999,
+    "attribution_mode": "Weighted by source belief"
+  },
+  "pbm_rates": {
+    "contact_rate": 0.5,
+    "belief_rate": 0.24,
+    "recovery_rate": 0.1,
+    "initial_believers": 6
+  },
+  "advanced_params": {
+    "calibration_multiplier": 3.0
+  },
+  "events": []
+}

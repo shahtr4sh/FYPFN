@@ -75,7 +75,7 @@ class FakeNewsSimulatorGUI:
         
         # Initialize variables
         self.topic = tk.StringVar(value="Ransomware Alert")
-        self.juiciness = tk.IntVar(value=50)
+        self.juiciness = tk.IntVar(value=50) # This is already 0-100
         # Agent sources are fixed: ABM uses CSV, PBM uses random-average agents
         self.context_text = tk.StringVar(value="")
         
@@ -87,12 +87,41 @@ class FakeNewsSimulatorGUI:
         self.scam_history = []
         self.intervention_rounds = []
         self.simulator = None
+        self.simulation_params_snapshot = {} # Holds the params of the last run
         
         # Load agents data
         # ABM CSV chooser (default will be chosen in setup_ui)
         self.abm_csv_var = tk.StringVar()
         self._load_agent_data()
+
+        # --- NEW PERCENTAGE-ONLY SLIDER VARIABLES ---
+        # These store the slider's position (e.g., -100 to 200)
+        self.pbm_contact_rate_pct_var = tk.DoubleVar(value=0.0)
+        self.pbm_belief_rate_pct_var = tk.DoubleVar(value=0.0)
+        self.pbm_recovery_rate_pct_var = tk.DoubleVar(value=0.0)
         
+        self.share_belief_pct_var = tk.DoubleVar(value=0.0)
+        self.share_emotion_pct_var = tk.DoubleVar(value=0.0)
+        self.share_conf_pct_var = tk.DoubleVar(value=0.0)
+        self.share_juice_pct_var = tk.DoubleVar(value=0.0)
+        
+        self.calibration_multiplier_pct_var = tk.DoubleVar(value=0.0)
+
+        # We also store the default values here for easy access
+        self.DEFAULTS = {
+            'pbm_contact': 0.4,
+            'pbm_belief': 0.3,
+            'pbm_recovery': 0.1,
+            'share_belief': 4.0,
+            'share_emotion': 1.5,
+            'share_conf': 1.0,
+            'share_juice': 1.0,
+            'calibration_multiplier': 3.0
+        }
+        
+        # This one is for the juiciness label
+        self.juiciness_label_var = tk.StringVar(value=f"Value: {self.juiciness.get()}%")
+
         # Set up the UI
         self.setup_ui()
 
@@ -169,6 +198,7 @@ class FakeNewsSimulatorGUI:
                     self._load_agent_data()
             if 'juiciness' in data:
                 try:
+                    # This will trigger the trace to update the label
                     self.juiciness.set(int(data.get('juiciness')))
                 except Exception:
                     pass
@@ -186,21 +216,41 @@ class FakeNewsSimulatorGUI:
             # ABM sharing params mapping
             abm_params = data.get('abm_sharing_params', {}) or {}
             # support alternate key names
-            def _set_if(varname, dkeys):
-                for k in dkeys:
-                    if k in abm_params:
-                        try:
-                            getattr(self, varname).set(float(abm_params[k]))
-                        except Exception:
-                            pass
-                        break
+            # Helper to reverse-calculate the percentage for a slider
+            def _set_pct_var(pct_var, default_val, actual_val):
+                try:
+                    actual = float(actual_val)
+                    if default_val == 0:
+                        pct_var.set(0.0)
+                    else:
+                        percent = ((actual / default_val) - 1.0) * 100.0
+                        pct_var.set(percent)
+                except Exception:
+                    pass # Keep slider at default if value is invalid
 
-            _set_if('share_belief_var', ['share_belief_weight', 'share_belief_var'])
-            _set_if('share_emotion_var', ['share_emotional_weight', 'share_emotion_var'])
-            _set_if('share_conf_var', ['share_conf_weight', 'share_confirmation_weight', 'share_conf_var'])
-            _set_if('share_juice_var', ['share_juice_weight', 'share_juice_var'])
-            _set_if('share_crit_var', ['share_crit_var', 'share_critical_penalty', 'share_crit'])
-            _set_if('share_offset_var', ['share_offset', 'share_offset_var'])
+            # --- NEW: Set percentage sliders from scenario values ---
+            for k in ['share_belief_weight', 'share_belief_var']:
+                if k in abm_params:
+                    _set_pct_var(self.share_belief_pct_var, self.DEFAULTS['share_belief'], abm_params[k])
+                    break
+            
+            for k in ['share_emotional_weight', 'share_emotion_var']:
+                if k in abm_params:
+                    _set_pct_var(self.share_emotion_pct_var, self.DEFAULTS['share_emotion'], abm_params[k])
+                    break
+            
+            for k in ['share_conf_weight', 'share_confirmation_weight', 'share_conf_var']:
+                if k in abm_params:
+                    _set_pct_var(self.share_conf_pct_var, self.DEFAULTS['share_conf'], abm_params[k])
+                    break
+            
+            for k in ['share_juice_weight', 'share_juice_var']:
+                if k in abm_params:
+                    _set_pct_var(self.share_juice_pct_var, self.DEFAULTS['share_juice'], abm_params[k])
+                    break
+
+            # Note: crit_var and offset_var removed from your new GUI, so no need to set them.
+
             if 'attribution_mode' in abm_params:
                 # set human-label combo directly if present
                 try:
@@ -211,12 +261,13 @@ class FakeNewsSimulatorGUI:
             # PBM rates
             pbm = data.get('pbm_rates', {}) or {}
             try:
+                # Set the PERCENT vars; the 'command' will update the label
                 if 'contact_rate' in pbm:
-                    self.pbm_contact_rate_var.set(float(pbm.get('contact_rate')))
+                     _set_pct_var(self.pbm_contact_rate_pct_var, self.DEFAULTS['pbm_contact'], pbm['contact_rate'])
                 if 'belief_rate' in pbm:
-                    self.pbm_belief_rate_var.set(float(pbm.get('belief_rate')))
+                    _set_pct_var(self.pbm_belief_rate_pct_var, self.DEFAULTS['pbm_belief'], pbm['belief_rate'])
                 if 'recovery_rate' in pbm:
-                    self.pbm_recovery_rate_var.set(float(pbm.get('recovery_rate')))
+                    _set_pct_var(self.pbm_recovery_rate_pct_var, self.DEFAULTS['pbm_recovery'], pbm['recovery_rate'])
                 if 'initial_believers' in pbm:
                     self.pbm_initial_believers_var.set(int(pbm.get('initial_believers')))
             except Exception:
@@ -226,7 +277,7 @@ class FakeNewsSimulatorGUI:
             adv = data.get('advanced_params', {}) or {}
             try:
                 if 'calibration_multiplier' in adv:
-                    self.calibration_multiplier_var.set(float(adv.get('calibration_multiplier')))
+                    _set_pct_var(self.calibration_multiplier_pct_var, self.DEFAULTS['calibration_multiplier'], adv['calibration_multiplier'])
             except Exception:
                 pass
         except Exception:
@@ -239,11 +290,21 @@ class FakeNewsSimulatorGUI:
             # Ensure scenario dir
             self._ensure_scenarios_dir()
             from tkinter import filedialog
-            # Suggest file name from topic or timestamp
-            suggested = (self._sim_topic or 'scenario').replace(' ', '_') + '.json'
+            
+            # Use getattr() to safely get _sim_topic, providing 'scenario' as a default
+            suggested_topic = getattr(self, '_sim_topic', 'scenario')
+            suggested = (suggested_topic or 'scenario').replace(' ', '_') + '.json'
+            
             fname = filedialog.asksaveasfilename(initialdir=self.scenarios_dir, initialfile=suggested, defaultextension='.json', filetypes=[('JSON files','*.json')])
             if not fname:
                 return
+
+            # --- FIX: Helper to read the REAL values from the sliders ---
+            def _calc_val(default, pct_var):
+                pct = pct_var.get()
+                val = default + (default * (pct / 100.0))
+                return max(0.0, val)
+
             scenario = {
                 'name': os.path.splitext(os.path.basename(fname))[0],
                 'description': '',
@@ -253,21 +314,23 @@ class FakeNewsSimulatorGUI:
                 'max_rounds': int(self.max_rounds_var.get()),
                 'intervention_round': int(self.intervention_round_var.get()),
                 'abm_sharing_params': {
-                    'share_belief_weight': float(self.share_belief_var.get()),
-                    'share_emotional_weight': float(self.share_emotion_var.get()),
-                    'share_conf_weight': float(self.share_conf_var.get()),
-                    'share_juice_weight': float(self.share_juice_var.get()),
+                    'share_belief_weight': _calc_val(self.DEFAULTS['share_belief'], self.share_belief_pct_var),
+                    'share_emotional_weight': _calc_val(self.DEFAULTS['share_emotion'], self.share_emotion_pct_var),
+                    'share_conf_weight': _calc_val(self.DEFAULTS['share_conf'], self.share_conf_pct_var),
+                    'share_juice_weight': _calc_val(self.DEFAULTS['share_juice'], self.share_juice_pct_var),
                     'attribution_mode': self.attribution_var.get()
                 },
+                
                 'pbm_rates': {
-                    'contact_rate': float(self.pbm_contact_rate_var.get()),
-                    'belief_rate': float(self.pbm_belief_rate_var.get()),
-                    'recovery_rate': float(self.pbm_recovery_rate_var.get()),
+                    'contact_rate': _calc_val(self.DEFAULTS['pbm_contact'], self.pbm_contact_rate_pct_var),
+                    'belief_rate': _calc_val(self.DEFAULTS['pbm_belief'], self.pbm_belief_rate_pct_var),
+                    'recovery_rate': _calc_val(self.DEFAULTS['pbm_recovery'], self.pbm_recovery_rate_pct_var),
                     'initial_believers': int(self.pbm_initial_believers_var.get())
                 },
                 'advanced_params': {
-                    'calibration_multiplier': float(self.calibration_multiplier_var.get())
+                    'calibration_multiplier': _calc_val(self.DEFAULTS['calibration_multiplier'], self.calibration_multiplier_pct_var)
                 },
+                
                 'events': []
             }
             with open(fname, 'w', encoding='utf-8') as fh:
@@ -278,6 +341,43 @@ class FakeNewsSimulatorGUI:
         except Exception as e:
             messagebox.showerror('Save error', str(e))
 
+    def _create_relative_slider(self, parent_frame, text, percent_var, 
+                                default_value, min_percent=-100, max_percent=200, 
+                                format_str="{:.2f}"):
+        """
+        Creates a slider that adjusts a percentage variable.
+        Uses the 'command' callback for stability (no 'trace').
+        """
+        ttk.Label(parent_frame, text=text, font=('Segoe UI', 10)).pack(anchor='w', padx=8)
+        
+        # This label will show the calculated value
+        label_var = tk.StringVar()
+        
+        # The callback function for the slider
+        def _on_slider_move(percent_str):
+            try:
+                percent = float(percent_str)
+                actual = default_value + (default_value * (percent / 100.0))
+                actual = max(0.0, actual)
+                
+                # Update the label text
+                label_var.set(f"Value: {actual:{format_str}}  ({percent:+.0f}%)")
+            except Exception:
+                label_var.set("Value: ---")
+
+        # Create the slider, binding to percent_var and using 'command'
+        slider = tk.Scale(parent_frame, from_=min_percent, to=max_percent, orient=tk.HORIZONTAL,
+                          variable=percent_var, length=260, showvalue=1, resolution=1,
+                          command=_on_slider_move) # Use command, not trace
+        slider.pack(anchor='w', padx=8)
+
+        # The label that displays the value
+        label = ttk.Label(parent_frame, textvariable=label_var, font=('Segoe UI', 9))
+        label.pack(anchor='w', padx=10, pady=(0, 8))
+
+        # Set the initial text
+        _on_slider_move(percent_var.get())
+        
     def setup_ui(self):
         """Set up the user interface with a modern, streamlined layout.
 
@@ -342,25 +442,38 @@ class FakeNewsSimulatorGUI:
         ttk.Button(btn_frame_scn, text='Load Scenario', command=self._on_scenario_load).pack(side='left', expand=True, fill='x', padx=(0,6))
         ttk.Button(btn_frame_scn, text='Save Current as Scenario', command=self._save_current_scenario).pack(side='left', expand=True, fill='x')
 
-        # Juiciness slider (ttk Scale not available cross-platform, keep tk.Scale but styled)
-        ttk.Label(params_frame, text='Juiciness:', font=default_font).pack(anchor='w', padx=8)
-        self.juiciness_scale = tk.Scale(params_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.juiciness, length=260)
-        self.juiciness_scale.pack(anchor='w', padx=8, pady=(0,8))
+        # Juiciness slider (already 0-100, but we add the label)
+        ttk.Label(params_frame, text='Juiciness (%):', font=default_font).pack(anchor='w', padx=8)
+        # --- MODIFICATION: Set showvalue=1 ---
+        self.juiciness_scale = tk.Scale(params_frame, from_=0, to=100, orient=tk.HORIZONTAL, 
+                                        variable=self.juiciness, length=260, showvalue=1)
+        self.juiciness_scale.pack(anchor='w', padx=8)
+        
+        # Add the label for Juiciness
+        def _update_juiciness_label(*args):
+            self.juiciness_label_var.set(f"Value: {self.juiciness.get()}%")
+        self.juiciness.trace_add('write', _update_juiciness_label)
+        ttk.Label(params_frame, textvariable=self.juiciness_label_var, font=('Segoe UI', 9)).pack(anchor='w', padx=10, pady=(0, 8))
+        _update_juiciness_label() # Set initial value
 
         ttk.Separator(params_frame, orient='horizontal').pack(fill='x', pady=6, padx=6)
 
         # Group: PBM params
         ttk.Label(params_frame, text='Population Model (PBM)', font=heading_font).pack(anchor='w', padx=8, pady=(6,4))
-        def add_scale(label, var, low, high, step=0.01):
-            ttk.Label(params_frame, text=label, font=default_font).pack(anchor='w', padx=8)
-            s = tk.Scale(params_frame, from_=low, to=high, resolution=step, orient=tk.HORIZONTAL, variable=var, length=260)
-            s.pack(anchor='w', padx=8, pady=(0,8))
-        self.pbm_contact_rate_var = tk.DoubleVar(value=0.4)
-        add_scale('PBM contact rate', self.pbm_contact_rate_var, 0.0, 1.0)
-        self.pbm_belief_rate_var = tk.DoubleVar(value=0.3)
-        add_scale('PBM belief rate', self.pbm_belief_rate_var, 0.0, 1.0)
-        self.pbm_recovery_rate_var = tk.DoubleVar(value=0.1)
-        add_scale('PBM recovery rate', self.pbm_recovery_rate_var, 0.0, 1.0)
+
+        # Create the new 0-100% sliders
+        self._create_relative_slider(params_frame, "PBM contact rate (%):", 
+            self.pbm_contact_rate_pct_var, default_value=self.DEFAULTS['pbm_contact'], 
+            min_percent=-100, max_percent=200, format_str=".2f")
+            
+        self._create_relative_slider(params_frame, "PBM belief rate (%):", 
+            self.pbm_belief_rate_pct_var, default_value=self.DEFAULTS['pbm_belief'], 
+            min_percent=-100, max_percent=200, format_str=".2f")
+            
+        self._create_relative_slider(params_frame, "PBM recovery rate (%):", 
+            self.pbm_recovery_rate_pct_var, default_value=self.DEFAULTS['pbm_recovery'], 
+            min_percent=-100, max_percent=200, format_str=".2f")
+        
         ttk.Label(params_frame, text='PBM initial believers:', font=default_font).pack(anchor='w', padx=8)
         self.pbm_initial_believers_var = tk.IntVar(value=5)
         tk.Spinbox(params_frame, from_=0, to=10000, textvariable=self.pbm_initial_believers_var, width=12).pack(anchor='w', padx=8, pady=(0,8))
@@ -370,15 +483,23 @@ class FakeNewsSimulatorGUI:
         # Group: ABM sharing model controls
         ttk.Label(params_frame, text='Agent-Based Model (ABM)', font=heading_font).pack(anchor='w', padx=8, pady=(6,4))
         ttk.Label(params_frame, text='*Higher weights indicate more influence.', font=note_font).pack(anchor='w', padx=8, pady=(1,1))
-        self.share_belief_var = tk.DoubleVar(value=4.0)
-        add_scale('Belief Weight', self.share_belief_var, 0.0, 8.0, 0.1)
-        self.share_emotion_var = tk.DoubleVar(value=1.5)
-        add_scale('Emotional Weight', self.share_emotion_var, 0.0, 4.0, 0.1)
-        self.share_conf_var = tk.DoubleVar(value=1.0)
-        add_scale('Confirmation Bias Weight', self.share_conf_var, 0.0, 4.0, 0.1)
-        self.share_juice_var = tk.DoubleVar(value=1.0)
-        add_scale('Virality Multiplier', self.share_juice_var, 0.0, 3.0, 0.05)
-
+        
+        self._create_relative_slider(params_frame, "Belief Weight (%):", 
+            self.share_belief_pct_var, default_value=self.DEFAULTS['share_belief'], 
+            min_percent=-100, max_percent=100, format_str=".1f")
+            
+        self._create_relative_slider(params_frame, "Emotional Weight (%):", 
+            self.share_emotion_pct_var, default_value=self.DEFAULTS['share_emotion'], 
+            min_percent=-100, max_percent=200, format_str=".1f")
+            
+        self._create_relative_slider(params_frame, "Confirmation Bias Weight (%):", 
+            self.share_conf_pct_var, default_value=self.DEFAULTS['share_conf'], 
+            min_percent=-100, max_percent=200, format_str=".1f")
+            
+        self._create_relative_slider(params_frame, "Virality Multiplier (%):", 
+            self.share_juice_pct_var, default_value=self.DEFAULTS['share_juice'], 
+            min_percent=-100, max_percent=200, format_str=".2f")
+        
         ttk.Separator(params_frame, orient='horizontal').pack(fill='x', pady=6, padx=6)
 
         # Attribution mode
@@ -391,8 +512,11 @@ class FakeNewsSimulatorGUI:
         # Calibration and run controls at bottom of params rail
         ttk.Separator(params_frame, orient='horizontal').pack(fill='x', pady=6, padx=6)
         ttk.Label(params_frame, text='Advanced', font=heading_font).pack(anchor='w', padx=8, pady=(6,4))
-        self.calibration_multiplier_var = tk.DoubleVar(value=3.0)
-        add_scale('Calibration multiplier', self.calibration_multiplier_var, 0.0, 10.0, 0.1)
+        
+        self._create_relative_slider(params_frame, "Calibration multiplier (%):", 
+            self.calibration_multiplier_pct_var, default_value=self.DEFAULTS['calibration_multiplier'], 
+            min_percent=-100, max_percent=200, format_str=".1f")
+        
         ttk.Label(params_frame, text='Intervention round:', font=default_font).pack(anchor='w', padx=8)
         self.intervention_round_var = tk.IntVar(value=5)
         tk.Spinbox(params_frame, from_=0, to=1000, textvariable=self.intervention_round_var, width=12).pack(anchor='w', padx=8, pady=(0,8))
@@ -467,11 +591,56 @@ class FakeNewsSimulatorGUI:
 
     def init_simulation(self):
         """Initialize a new simulation."""
+        
+        # --- NEW: Calculate final values from percentages ---
+        def _calc_val(default, pct_var):
+            pct = pct_var.get()
+            val = default + (default * (pct / 100.0))
+            return max(0.0, val) # Ensure no negative values
+
+        try:
+            # Read the percentages and calculate the final values
+            val_belief = _calc_val(self.DEFAULTS['share_belief'], self.share_belief_pct_var)
+            val_emotion = _calc_val(self.DEFAULTS['share_emotion'], self.share_emotion_pct_var)
+            val_conf = _calc_val(self.DEFAULTS['share_conf'], self.share_conf_pct_var)
+            val_juice = _calc_val(self.DEFAULTS['share_juice'], self.share_juice_pct_var)
+            
+            val_pbm_contact = _calc_val(self.DEFAULTS['pbm_contact'], self.pbm_contact_rate_pct_var)
+            val_pbm_belief = _calc_val(self.DEFAULTS['pbm_belief'], self.pbm_belief_rate_pct_var)
+            val_pbm_recovery = _calc_val(self.DEFAULTS['pbm_recovery'], self.pbm_recovery_rate_pct_var)
+            
+            val_calib = _calc_val(self.DEFAULTS['calibration_multiplier'], self.calibration_multiplier_pct_var)
+
+            # Your debug print can now check the calculated value
+            print(f"DEBUG: Reading pct={self.share_belief_pct_var.get()} -> final_val={val_belief}")
+
+            self.simulation_params_snapshot = {
+                'abm_belief_weight': val_belief,
+                'abm_emotion_weight': val_emotion,
+                'abm_conf_weight': val_conf,
+                'abm_juice_weight': val_juice,
+                'abm_attribution': self.attribution_var.get(),
+                
+                'pbm_contact': val_pbm_contact,
+                'pbm_belief': val_pbm_belief,
+                'pbm_recovery': val_pbm_recovery,
+                'pbm_initial': int(self.pbm_initial_believers_var.get()),
+                
+                'run_intervention': int(self.intervention_round_var.get()),
+                'run_calibration': val_calib
+            }
+            
+            print(f"DEBUG: Snapshot created. Belief weight is: {self.simulation_params_snapshot['abm_belief_weight']}")
+            
+        except Exception as e:
+            print(f"Warning: Could not create params snapshot. {e}")
+            self.simulation_params_snapshot = {} # Clear on error
+            
         # Analyze context and set juiciness
         context = self.context_text.get().lower()
         juiciness_score = analyze_context_juiciness(context)
         self.juiciness.set(juiciness_score)
-        self.juiciness_scale.set(juiciness_score)
+        # self.juiciness_scale.set(juiciness_score) # No longer needed, trace will do this
 
         # Infer topic
         topic, topic_weight, topic_category = infer_topic_from_context(
@@ -808,10 +977,13 @@ class FakeNewsSimulatorGUI:
 
     def _populate_summary_tab(self):
         """Populate the Summary tab in the central notebook with latest results."""
+        
+        content = self._make_scrollable(self.tab_summary)
+        
         # Clear any existing content and use the Summary tab directly (no scrollable wrapper)
-        for w in self.tab_summary.winfo_children():
+        for w in content.winfo_children(): # <-- Make sure this now uses 'content'
             w.destroy()
-        content = self.tab_summary
+        # content = self.tab_summary # <-- DELETE OR COMMENT OUT THIS LINE
 
         # Summary header
         header = ttk.Label(content, text='Simulation Summary', font=('Segoe UI', 12, 'bold'))
@@ -827,6 +999,44 @@ class FakeNewsSimulatorGUI:
         info_frame.pack(fill='x', padx=8, pady=6)
         ttk.Label(info_frame, text=f'Topic: {getattr(self, "_sim_topic", "Unknown")}').pack(anchor='w')
         ttk.Label(info_frame, text=f'Juiciness: {self.juiciness.get()}/100').pack(anchor='w')
+
+        # --- START: NEW PARAMETER SUMMARY SECTION ---
+        
+        params_summary_frame = ttk.LabelFrame(content, text="Simulation Parameters Used", padding=(10, 5))
+        params_summary_frame.pack(fill='x', padx=8, pady=6)
+        
+        col_frame = ttk.Frame(params_summary_frame)
+        col_frame.pack(fill='x')
+        
+        left_col = ttk.Frame(col_frame)
+        left_col.pack(side='left', fill='x', expand=True, padx=5)
+        
+        right_col = ttk.Frame(col_frame)
+        right_col.pack(side='left', fill='x', expand=True, padx=5)
+
+        # --- Read from the SNAPSHOT, not the live variables ---
+        params = self.simulation_params_snapshot
+        
+        # ABM Parameters (Left Column)
+        ttk.Label(left_col, text="ABM Sharing Parameters:", font=('Segoe UI', 9, 'bold')).pack(anchor='w')
+        ttk.Label(left_col, text=f"  • Belief Weight: {params.get('abm_belief_weight', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(left_col, text=f"  • Emotional Weight: {params.get('abm_emotion_weight', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(left_col, text=f"  • Confirmation Bias: {params.get('abm_conf_weight', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(left_col, text=f"  • Virality Multiplier: {params.get('abm_juice_weight', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(left_col, text=f"  • Attribution: {params.get('abm_attribution', 'N/A')}").pack(anchor='w')
+        
+        # PBM & Advanced Parameters (Right Column)
+        ttk.Label(right_col, text="PBM Parameters:", font=('Segoe UI', 9, 'bold')).pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Contact Rate: {params.get('pbm_contact', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Belief Rate: {params.get('pbm_belief', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Recovery Rate: {params.get('pbm_recovery', 'N/A'):.2f}").pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Initial Believers: {params.get('pbm_initial', 'N/A')}").pack(anchor='w')
+        
+        ttk.Label(right_col, text="Run Settings:", font=('Segoe UI', 9, 'bold'), padding=(0, 5, 0, 0)).pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Intervention Round: {params.get('run_intervention', 'N/A')}").pack(anchor='w')
+        ttk.Label(right_col, text=f"  • Calibration Multiplier: {params.get('run_calibration', 'N/A'):.1f}").pack(anchor='w')
+        
+        # --- END: NEW PARAMETER SUMMARY SECTION ---
 
         # Small plots area
         plots_frame = ttk.Frame(content)
@@ -848,7 +1058,7 @@ class FakeNewsSimulatorGUI:
             pbm_hist = self.pbm_simulator.get_history()
             pbm_vals = pbm_hist.get('believers', [])
             if pbm_vals:
-                ax2.plot(range(1, len(pbm_vals)+1), pbm_vals, marker='s', color='#6bafff')
+                ax2.plot(range(1, len(pbm_vals)+1), pbm_vals, marker='s', color='#6bafff', label='Believers')
                 # PBM title and axis labels
                 ax2.set_title('Population-Based Model (PBM)', fontweight='bold')
                 ax2.set_xlabel('Round', fontsize=9)
@@ -1007,474 +1217,8 @@ class FakeNewsSimulatorGUI:
         except Exception:
             pass
 
-    def _show_scam_summary(self, summary_frame):
-        """Show summary for scam simulation."""
-        scam_counts = [sum(1 for a in round_data if a) 
-                      for round_data in self.scam_history]
-        total_scammed = sum(scam_counts)
-
-        # Create plot
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        ax.plot(range(1, len(scam_counts)+1), scam_counts, marker='o', color='red', label='Victims')
-        
-        # Draw intervention lines
-        for r in self.intervention_rounds:
-            ax.axvline(
-                r+1, color='green', linestyle='--',
-                label='Intervention' if r == self.intervention_rounds[0] else None
-            )
-            
-        # Always add legend if we have data
-        if len(scam_counts) > 0:
-            ax.legend(loc='upper left')
-            
-        ax.set_title("Scam Victims Over Time")
-        ax.set_xlabel("Round")
-        ax.set_ylabel("Victims")
-        ax.grid(True, alpha=0.3)
-
-        # Add plot to summary frame
-        canvas = FigureCanvasTkAgg(fig, master=summary_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        # Add summary text
-        text_frame = tk.Frame(summary_frame)
-        text_frame.pack(fill=tk.X, pady=5)
-        summary = (
-            f"Topic: {self._sim_topic}\n"
-            f"Total Scam Victims: {total_scammed}\n"
-            f"Peak Victims: {max(scam_counts) if scam_counts else 0}\n"
-            f"Final Round State: {scam_counts[-1] if scam_counts else 0} victims"
-        )
-
-    def _show_fake_news_summary(self, summary_frame):
-        """Show summary for fake news simulation."""
-        # Calculate statistics
-        victim_counts = [sum(1 for a in round_data if a) 
-                        for round_data in self.round_history]
-        total_shares = sum(victim_counts)
-        peak_believers = max(victim_counts) if victim_counts else 0
-        final_believers = victim_counts[-1] if victim_counts else 0
-        peak_round = victim_counts.index(peak_believers) + 1 if victim_counts else 0
-        total_agents = len(self.abm_simulator.G.nodes())
-        
-        # Calculate PBM statistics
-        pbm_history = self.pbm_simulator.get_history()
-        pbm_believers = pbm_history['believers']
-        pbm_peak = max(pbm_believers)
-        pbm_peak_round = pbm_believers.index(pbm_peak) + 1
-        pbm_final = pbm_believers[-1]
-        
-        # Calculate intervention effects if applied
-        pre_intervention = None
-        post_intervention = None
-        if self.intervention and len(victim_counts) > 5:
-            pre_intervention = sum(victim_counts[:5]) / 5
-            post_intervention = sum(victim_counts[5:10]) / 5
-        
-        # Calculate losses
-        losses = self._calculate_losses(total_shares)
-        
-        # Create main info frame
-        info_frame = tk.Frame(summary_frame, relief=tk.RIDGE, bd=2)
-        info_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        # Add context section
-        tk.Label(info_frame, text="News Context Analysis", font=('Arial', 12, 'bold')).pack(pady=(10,5))
-        context_text = (
-            f"Topic Category: {self._sim_topic_category}\n"
-            f"Context: {self.context_text.get()}\n"
-            f"Juiciness Score: {self.juiciness.get()}/100\n"
-            f"Topic Weight: {self._sim_topic_weight:.2f}"
-        )
-        tk.Label(info_frame, text=context_text, justify=tk.LEFT, font=('Arial', 10), wraplength=500).pack(padx=10, pady=5)
-        
-        # Add model comparison section
-        tk.Label(info_frame, text="Model Comparison", font=('Arial', 12, 'bold')).pack(pady=(10,5))
-        comparison_text = (
-            f"Agent-Based Model (ABM):\n"
-            f"• Peak Believers: {peak_believers} ({peak_believers/total_agents*100:.1f}%) at round {peak_round}\n"
-            f"• Final State: {final_believers} ({final_believers/total_agents*100:.1f}%)\n"
-            f"• Total Shares: {total_shares}\n\n"
-            f"Population-Based Model (PBM):\n"
-            f"• Peak Believers: {int(pbm_peak)} ({pbm_peak/total_agents*100:.1f}%) at round {pbm_peak_round}\n"
-            f"• Final State: {int(pbm_final)} ({pbm_final/total_agents*100:.1f}%)\n"
-            f"• Diffusion Rate: {pbm_peak/total_agents:.3f}"
-        )
-        tk.Label(info_frame, text=comparison_text, justify=tk.LEFT, font=('Arial', 10)).pack(padx=10, pady=5)
-        
-        # Add intervention effects if applicable
-        if pre_intervention is not None:
-            tk.Label(info_frame, text="Intervention Analysis", font=('Arial', 12, 'bold')).pack(pady=(10,5))
-            intervention_text = (
-                f"Pre-intervention average: {pre_intervention:.1f} believers/round\n"
-                f"Post-intervention average: {post_intervention:.1f} believers/round\n"
-                f"Effect: {((post_intervention - pre_intervention) / pre_intervention * 100):.1f}% change"
-            )
-            tk.Label(info_frame, text=intervention_text, justify=tk.LEFT, font=('Arial', 10)).pack(padx=10, pady=5)
-        
-        # Add risk analysis section
-        tk.Label(info_frame, text="Risk Analysis", font=('Arial', 12, 'bold')).pack(pady=(10,5))
-        risk_text = (
-            f"Financial Impact Risk: {losses['Financial Loss']*100:.1f}%\n"
-            f"Reputational Damage Risk: {losses['Reputation Loss']*100:.1f}%\n"
-            f"Trust Erosion Risk: {losses['Trust Loss']*100:.1f}%"
-        )
-        tk.Label(info_frame, text=risk_text, justify=tk.LEFT, font=('Arial', 10)).pack(padx=10, pady=5)
-        
-        # ===== Interactive ABM spreaders & transmission log =====
-        trans_frame = tk.LabelFrame(summary_frame, text="ABM Spreaders & Transmission Log", padx=8, pady=8)
-        trans_frame.pack(fill=tk.BOTH, padx=10, pady=8)
-
-        # Left: Spreaders per round list + details
-        left = tk.Frame(trans_frame)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,8))
-
-        tk.Label(left, text="ABM Spreaders (per round)", font=('Arial', 11, 'bold')).pack(anchor='w')
-        round_listbox = tk.Listbox(left, height=8)
-        round_listbox.pack(fill=tk.BOTH, expand=False, pady=(4,4))
-
-        # populate rounds
-        spreaders_by_round = []
-        for r, rnd in enumerate(self.round_history, start=1):
-            ids = [i for i, v in enumerate(rnd) if v]
-            spreaders_by_round.append(ids)
-            round_listbox.insert(tk.END, f"Round {r}: {len(ids)} spreader(s)")
-
-        # detail box for selected round
-        detail_label = tk.Label(left, text="Selected round spreaders:")
-        detail_label.pack(anchor='w')
-        detail_txt = tk.Text(left, height=4, wrap='none')
-        detail_txt.pack(fill=tk.BOTH, expand=False)
-
-        total_unique = set(x for ids in spreaders_by_round for x in ids)
-        uniq_label = tk.Label(left, text=f"Total unique spreaders: {len(total_unique)}")
-        uniq_label.pack(anchor='w', pady=(4,0))
-
-        # Show a compact, scrollable list of unique spreader IDs
-        ids_list = sorted(total_unique)
-        display_ids = ids_list[:500]
-        ids_frame = tk.Frame(left)
-        ids_frame.pack(fill='x', pady=(4,6))
-        tk.Label(ids_frame, text='Unique spreaders (IDs):', font=('Arial', 9)).pack(anchor='w')
-        # Use a Listbox with vertical scrollbar so the unique spreaders are easy to scan
-        lb_frame = tk.Frame(ids_frame)
-        lb_frame.pack(fill='both', expand=True)
-        ids_listbox = tk.Listbox(lb_frame, height=6, selectmode=tk.SINGLE, font=('Courier', 9))
-        ids_scroll = ttk.Scrollbar(lb_frame, orient='vertical', command=ids_listbox.yview)
-        ids_listbox.configure(yscrollcommand=ids_scroll.set)
-        ids_listbox.pack(side='left', fill='both', expand=True)
-        ids_scroll.pack(side='right', fill='y')
-        if display_ids:
-            for i in display_ids:
-                ids_listbox.insert(tk.END, str(i))
-            if len(ids_list) > len(display_ids):
-                ids_listbox.insert(tk.END, f'...(+{len(ids_list)-len(display_ids)} more)')
-        else:
-            ids_listbox.insert(tk.END, 'No spreaders recorded.')
-
-        # Double-clicking an ID in the unique spreaders list will highlight
-        # that node in the ABM visualization for quick inspection.
-        def _on_ids_double_click(event):
-            sel = event.widget.curselection()
-            if not sel:
-                return
-            val = event.widget.get(sel[0])
-            # ignore the "...(+N more)" entry
-            if isinstance(val, str) and val.startswith('...'):
-                return
-            try:
-                node_id = int(val)
-            except Exception:
-                return
-            try:
-                # switch to Visualize tab and call update_graph with highlight
-                self.notebook.select(self.tab_visualize)
-            except Exception:
-                pass
-            try:
-                self.update_graph(highlight_ids=[node_id])
-                # revert highlight after 4 seconds to avoid sticky state
-                self.root.after(4000, lambda: self.update_graph())
-            except Exception:
-                pass
-
-        ids_listbox.bind('<Double-Button-1>', _on_ids_double_click)
-
-        def on_round_select(evt):
-            sel = round_listbox.curselection()
-            detail_txt.delete('1.0', tk.END)
-            if not sel:
-                return
-            idx = sel[0]
-            ids = spreaders_by_round[idx]
-            detail_txt.insert(tk.END, f"IDs: {ids}\n")
-            detail_txt.insert(tk.END, f"Count: {len(ids)}\n")
-
-        round_listbox.bind('<<ListboxSelect>>', on_round_select)
-
-        # Right: Transmission log (treeview) + controls
-        right = tk.Frame(trans_frame)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        tk.Label(right, text="Transmission Log (source → target)", font=('Arial', 11, 'bold')).pack(anchor='w')
-        tree = ttk.Treeview(right, columns=('round', 'source', 'target'), show='headings', height=8)
-        tree.heading('round', text='Round')
-        tree.heading('source', text='Source')
-        tree.heading('target', text='Target')
-        tree.column('round', width=60, anchor='center')
-        tree.column('source', width=80, anchor='center')
-        tree.column('target', width=80, anchor='center')
-        tree.pack(fill=tk.BOTH, expand=True, pady=(4,4))
-
-        # populate transmission entries
-        total_trans = 0
-        for r, trans in enumerate(getattr(self.abm_simulator, 'transmission_history', []), start=1):
-            for (s, t) in trans:
-                tree.insert('', tk.END, values=(r, s, t))
-                total_trans += 1
-
-        total_label = tk.Label(right, text=f"Total transmissions: {total_trans}")
-        total_label.pack(anchor='w', pady=(4,2))
-
-        def export_transmissions():
-            # Ask for filename
-            fname = filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV files','*.csv')])
-            if not fname:
-                return
-            try:
-                with open(fname, 'w', newline='') as fh:
-                    fh.write('round,source,target\n')
-                    for r, trans in enumerate(getattr(self.abm_simulator, 'transmission_history', []), start=1):
-                        for (s, t) in trans:
-                            fh.write(f"{r},{s},{t}\n")
-                messagebox.showinfo('Export', f'Wrote transmissions to {fname}')
-            except Exception as e:
-                messagebox.showerror('Export error', str(e))
-
-        btn_frame = tk.Frame(right)
-        btn_frame.pack(fill=tk.X, pady=(6,0))
-        tk.Button(btn_frame, text='Export CSV', command=export_transmissions).pack(side=tk.LEFT)
-
-        # neat small notes
-        notes = tk.Label(summary_frame, text='Tip: select a round to see its spreaders. Use Export to save full transmission log.', fg='#333333')
-        notes.pack(fill=tk.X, padx=12, pady=(2,8))
-        # Add recommendations
-        tk.Label(info_frame, text="Recommendations", font=('Arial', 12, 'bold')).pack(pady=(10,5))
-        recommendations = self._generate_recommendations(losses, peak_believers/total_agents)
-        tk.Label(info_frame, text=recommendations, justify=tk.LEFT, font=('Arial', 10), wraplength=500).pack(padx=10, pady=(5,10))
-
-        # --- Spreader information (ABM) ---
-        spreader_frame = tk.Frame(summary_frame, relief=tk.RIDGE, bd=1)
-        spreader_frame.pack(fill=tk.BOTH, padx=10, pady=(8, 10), expand=False)
-        tk.Label(spreader_frame, text="ABM Spreaders (per round)", font=('Arial', 11, 'bold')).pack(anchor='w', padx=6, pady=(6,2))
-
-        # Compute spreaders per round from ABM round history (self.round_history)
-        # Each element in round_history is a list-like of booleans indicating shared state per agent
-        spreaders_per_round = []
-        unique_spreaders = set()
-        for ridx, rnd in enumerate(self.round_history):
-            try:
-                spreaders = [i for i, val in enumerate(rnd) if val]
-            except Exception:
-                # If rnd is not iterable in the expected way, skip
-                spreaders = []
-            spreaders_per_round.append(spreaders)
-            unique_spreaders.update(spreaders)
-
-        # Create a small scrollable text widget to list spreaders
-        text_container = tk.Frame(spreader_frame)
-        text_container.pack(fill=tk.BOTH, padx=6, pady=(0,6), expand=True)
-        txt = tk.Text(text_container, height=6, wrap='none', font=('Courier', 9))
-        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(text_container, orient='vertical', command=txt.yview)
-        scrollbar.pack(side=tk.RIGHT, fill='y')
-        txt.configure(yscrollcommand=scrollbar.set)
-
-        if spreaders_per_round:
-            for r, s in enumerate(spreaders_per_round, start=1):
-                if s:
-                    txt.insert(tk.END, f"Round {r}: {s}\n")
-                else:
-                    txt.insert(tk.END, f"Round {r}: []\n")
-        else:
-            txt.insert(tk.END, "No ABM rounds recorded (run the simulation first).\n")
-
-        # Show cumulative unique spreaders summary
-        txt.insert(tk.END, "\n")
-        txt.insert(tk.END, f"Total unique spreaders: {len(unique_spreaders)}\n")
-        if unique_spreaders:
-            # show first 200 ids to avoid extremely long lists
-            ids_list = sorted(unique_spreaders)
-            display_ids = ids_list[:200]
-            txt.insert(tk.END, f"Spreaders (IDs): {display_ids}")
-            if len(ids_list) > len(display_ids):
-                txt.insert(tk.END, f"  ...(+{len(ids_list)-len(display_ids)} more)\n")
-
-        txt.configure(state='disabled')
-        
-        # --- Transmission log summary ---
-        trans_frame = tk.Frame(summary_frame, relief=tk.RIDGE, bd=1)
-        trans_frame.pack(fill=tk.BOTH, padx=10, pady=(0, 10), expand=False)
-        tk.Label(trans_frame, text="Transmission Log (source -> target)", font=('Arial', 11, 'bold')).pack(anchor='w', padx=6, pady=(6,2))
-
-        trans_text = tk.Text(trans_frame, height=6, wrap='none', font=('Courier', 9))
-        trans_text.pack(fill=tk.BOTH, padx=6, pady=(0,6))
-        # Get transmissions from simulator if available
-        transmissions_all = []
-        if hasattr(self, 'abm_simulator') and hasattr(self.abm_simulator, 'transmission_history'):
-            transmissions_all = self.abm_simulator.transmission_history
-
-        if transmissions_all:
-            total_edges = sum(len(r) for r in transmissions_all)
-            trans_text.insert(tk.END, f"Total transmissions: {total_edges}\n\n")
-            # show per-round transmissions
-            for r, edges in enumerate(transmissions_all, start=1):
-                if edges:
-                    trans_text.insert(tk.END, f"Round {r}: {edges}\n")
-                else:
-                    trans_text.insert(tk.END, f"Round {r}: []\n")
-        else:
-            trans_text.insert(tk.END, "No transmission records available. Run the simulation to generate logs.\n")
-
-        trans_text.configure(state='disabled')
-
-    def _generate_recommendations(self, losses, peak_spread_rate):
-        """Generate recommendations based on simulation results."""
-        recommendations = []
-        
-        # Spread rate based recommendations
-        if peak_spread_rate > 0.7:
-            recommendations.append("URGENT: Immediate response required - viral spread detected")
-        elif peak_spread_rate > 0.4:
-            recommendations.append("High spread rate - prioritize containment measures")
-        
-        # Risk-based recommendations
-        max_risk = max(losses.items(), key=lambda x: x[1])
-        if max_risk[1] > 0.6:
-            recommendations.append(f"Critical {max_risk[0].lower()} risk - implement mitigation strategies")
-        
-        # General recommendations
-        if self.intervention:
-            recommendations.append("Continue monitoring intervention effectiveness")
-        else:
-            recommendations.append("Consider implementing intervention measures")
-            
-        return "\n".join(f"• {r}" for r in recommendations)
-
-    def _calculate_losses(self, total_shares):
-        """Calculate various loss probabilities."""
-        juice_factor = self.juiciness.get() / 100.0
-        financial_loss = reputational_loss = trust_loss = 0.05
-
-        if self._sim_topic_category == 'Reputation-based Rumors':
-            reputational_loss = min(1.0, 0.1 + 0.025 * total_shares * juice_factor)
-        elif self._sim_topic_category in ['Phishing', 'Scare Tactics']:
-            trust_loss = min(1.0, 0.15 + 0.035 * total_shares * 
-                           (1 if not self.intervention else 0.5))
-        elif (self._sim_topic_category == 'Policy Manipulation' or 
-              self._sim_topic in ["Financial Scam", "Fake Scholarship Scam",
-                                "Emergency VPN Update", "Student Aid Sabotage",
-                                "University Database Hacked", "Data Breach"]):
-            financial_loss = min(1.0, 0.2 + 0.012 * total_shares + 
-                               0.007 * self.juiciness.get())
-
-        return {
-            "Financial Loss": financial_loss,
-            "Reputation Loss": reputational_loss,
-            "Trust Loss": trust_loss
-        }
-
-    def _create_summary_plots(self, victim_counts, losses):
-        """Create summary visualization plots."""
-        fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-        
-        # Victims over time plot
-        axs[0].plot(range(1, len(victim_counts)+1), victim_counts, marker='o')
-        for r in self.intervention_rounds:
-            axs[0].axvline(
-                r+1, color='green', linestyle='--',
-                label='Intervention' if r == self.intervention_rounds[0] else ""
-            )
-        if self.intervention_rounds:
-            axs[0].legend()
-        axs[0].set_title("Victims Over Time")
-        axs[0].set_xlabel("Round")
-        axs[0].set_ylabel("Victims")
-
-        # Loss probabilities plot
-        bar_colors = ["#E15759", "#F28E2B", "#4E79A7"]
-        bars = axs[1].bar(losses.keys(), losses.values(), color=bar_colors)
-        axs[1].set_ylim(0, 1)
-        axs[1].set_ylabel("Probability (0-1)")
-        axs[1].set_title("Simulated Loss Probabilities (Higher = Worse)")
-
-        # Add value labels
-        for bar in bars:
-            xpos = bar.get_x() + bar.get_width() / 2
-            value = bar.get_height()
-            axs[1].text(xpos, value - 0.03, f"{value:.2f}", 
-                       ha='center', va='center', fontsize=10,
-                       fontweight='bold', color='white')
-
-        fig.tight_layout(rect=[0, 0.18, 1, 1])
-        fig.subplots_adjust(bottom=0.28)
-        fig.text(0.5, 0.13, 
-                "Each bar shows the risk of each loss type from this simulation "
-                "(0 = none, 1 = certain)",
-                ha='center', fontsize=9, color='#333')
-
-        return fig
-
-    def _add_summary_controls(self, summary_win, fig):
-        """Add control buttons to summary window."""
-        def add_more_rounds():
-            self.max_rounds += 10
-            self.extra_rounds = True
-            plt.close(fig)
-            summary_win.destroy()
-            self.root.after(500, self.automate_rounds)
-
-        def end_simulation_now():
-            plt.close(fig)
-            summary_win.destroy()
-            try:
-                self.reset_btn.state(['!disabled'])
-            except Exception:
-                pass
-
-        button_frame = tk.Frame(summary_win)
-        button_frame.pack(pady=8)
-        
-        more_btn = tk.Button(button_frame, text="Add 10 More Rounds",
-                            command=add_more_rounds)
-        more_btn.pack(side="left", padx=5)
-        
-        end_btn = tk.Button(button_frame, text="End Simulation Now",
-                           command=end_simulation_now)
-        end_btn.pack(side="left", padx=5)
-
-        def on_close():
-            plt.close(fig)
-            summary_win.destroy()
-            try:
-                self.reset_btn.state(['!disabled'])
-            except Exception:
-                pass
-        summary_win.protocol("WM_DELETE_WINDOW", on_close)
-
     def _init_simulators(self):
-        """Initialize both ABM and PBM simulators."""
-        # Reset simulation state
-        self.round = 0
-        self.round_label.config(text=f"Round: {self.round}")
-        self.intervention = False
-        self.extra_rounds = False
-        self.round_history = []
-        self.scam_history = []
-        self.intervention_rounds = []
-
+        
         # Initialize ABM simulator
         num_agents = len(self.df_agents)
         # ABM must use the CSV agent profiles
@@ -1483,14 +1227,17 @@ class FakeNewsSimulatorGUI:
 
         # Apply ABM sharing model parameters from GUI controls (if present)
         try:
-            # These variables are optional - only set if the GUI provided them
-            self.abm_simulator.share_belief_weight = float(getattr(self, 'share_belief_var', tk.DoubleVar(4.0)).get())
-            self.abm_simulator.share_emotional_weight = float(getattr(self, 'share_emotion_var', tk.DoubleVar(1.5)).get())
-            self.abm_simulator.share_confirmation_weight = float(getattr(self, 'share_conf_var', tk.DoubleVar(1.0)).get())
-            self.abm_simulator.share_juice_weight = float(getattr(self, 'share_juice_var', tk.DoubleVar(1.0)).get())
-            self.abm_simulator.share_critical_penalty = float(getattr(self, 'share_crit_var', tk.DoubleVar(2.0)).get())
-            self.abm_simulator.share_offset = float(getattr(self, 'share_offset_var', tk.DoubleVar(-1.0)).get())
+            # --- NEW: Calculate values from percentages ---
+            def _calc_val(default, pct_var):
+                pct = pct_var.get()
+                val = default + (default * (pct / 100.0))
+                return max(0.0, val)
 
+            self.abm_simulator.share_belief_weight = _calc_val(self.DEFAULTS['share_belief'], self.share_belief_pct_var)
+            self.abm_simulator.share_emotional_weight = _calc_val(self.DEFAULTS['share_emotion'], self.share_emotion_pct_var)
+            self.abm_simulator.share_confirmation_weight = _calc_val(self.DEFAULTS['share_conf'], self.share_conf_pct_var)
+            self.abm_simulator.share_juice_weight = _calc_val(self.DEFAULTS['share_juice'], self.share_juice_pct_var)
+            
             # Map the attribution combo human label to internal mode
             sel = getattr(self, 'attribution_var', tk.StringVar('Weighted by source belief')).get()
             mapping = {
@@ -1520,17 +1267,19 @@ class FakeNewsSimulatorGUI:
         # Probability heuristic
         P = 0.3 + 0.2 * topic_w + 0.15 * ((cb + es + tl) / 3.0) - 0.2 * ct
         P = np.clip(P, 0.0, 1.0)
-        initial_believers_pbm = int(round(P.sum()))
+        initial_believers_pbm = int(round(P.sum())) # <-- This calculates 25
 
+        # --- THIS IS THE FIX: RESTORED THE OVERRIDE BLOCK ---
         # Allow user override for PBM initial believers
         try:
             user_init = int(self.pbm_initial_believers_var.get())
             if user_init > 0:
-                initial_believers_pbm = user_init
+                initial_believers_pbm = user_init  # <-- This overrides 25 with 5
             elif user_init == 0:
                 initial_believers_pbm = 0
         except Exception:
             pass
+        # --- END OF FIX ---
 
         # PBM state trackers
         self.pbm_believers = [initial_believers_pbm / max(1, num_agents)]
@@ -1538,7 +1287,7 @@ class FakeNewsSimulatorGUI:
 
         # --- PBM simulator independent initialization ---
         # Pass the estimated initial believers into the PopulationSimulator
-        self.pbm_simulator = PopulationSimulator(num_agents, initial_believers=initial_believers_pbm)
+        self.pbm_simulator = PopulationSimulator(num_agents, initial_believers=initial_believers_pbm) # <-- This now correctly gets 5
 
         # Adjust PBM rates based on simulation conditions (topic weight, juiciness, intervention)
         self.pbm_simulator.adjust_rates(
@@ -1547,21 +1296,22 @@ class FakeNewsSimulatorGUI:
             self.intervention
         )
 
+        # --- THIS IS THE CORRECTED SLIDER LOGIC, IN THE CORRECT PLACE ---
         # Override PBM rates with user-specified parameters (if provided)
         try:
-            cr = float(self.pbm_contact_rate_var.get())
-            br = float(self.pbm_belief_rate_var.get())
-            rr = float(self.pbm_recovery_rate_var.get())
-            # Apply if sensible
-            if 0.0 <= cr <= 1.0:
-                self.pbm_simulator.rates.contact_rate = cr
-            if 0.0 <= br <= 1.0:
-                # Some models store belief_rate as 'belief_rate' or params; try both
-                setattr(self.pbm_simulator.rates, 'belief_rate', br)
-            if 0.0 <= rr <= 1.0:
-                setattr(self.pbm_simulator.rates, 'recovery_rate', rr)
+            # --- NEW: Calculate values from percentages ---
+            def _calc_val(default, pct_var):
+                pct = pct_var.get()
+                val = default + (default * (pct / 100.0))
+                return max(0.0, val)
+
+            self.pbm_simulator.rates.contact_rate = _calc_val(self.DEFAULTS['pbm_contact'], self.pbm_contact_rate_pct_var)
+            setattr(self.pbm_simulator.rates, 'belief_rate', _calc_val(self.DEFAULTS['pbm_belief'], self.pbm_belief_rate_pct_var))
+            setattr(self.pbm_simulator.rates, 'recovery_rate', _calc_val(self.DEFAULTS['pbm_recovery'], self.pbm_recovery_rate_pct_var))
+            
         except Exception:
             pass
+        # --- END OF FIX ---
 
         # --- Calibration: scale PBM contact_rate to account for ABM network structure ---
         # Compute average degree (avg number of neighbors) in the ABM network
@@ -1573,14 +1323,18 @@ class FakeNewsSimulatorGUI:
             # Scale factor: modest amplification as density increases
             mult = 3.0
             try:
-                mult = float(self.calibration_multiplier_var.get())
+                # --- THIS IS THE CORRECTED CALIBRATION LOGIC ---
+                pct = self.calibration_multiplier_pct_var.get()
+                default = self.DEFAULTS['calibration_multiplier']
+                mult = default + (default * (pct / 100.0))
+                mult = max(0.0, mult)
             except Exception:
                 pass
             scale = 1.0 + mult * density
             # Apply scaling to PBM contact rate (keep within reasonable bound)
             original = getattr(self.pbm_simulator.rates, 'contact_rate', None)
             if original is not None:
-                self.pbm_simulator.rates.contact_rate = min(0.95, original * scale)
+                self.pbm_simulator.rates.contact_rate = original * scale
         except Exception:
             # If anything goes wrong, leave PBM rates as-is
             pass
@@ -1608,109 +1362,11 @@ class FakeNewsSimulatorGUI:
         # Update UI: enable reset, disable run
         try:
             self.reset_btn.state(['!disabled'])
-            self.run_btn.state(['disabled'])
+            self.run_btn.state(['!disabled'])
         except Exception:
             pass
         self.update_graph()
         self.root.after(500, self.automate_rounds)
-
-    def run_next_round(self):
-        """Run the next simulation round for both models."""
-        if self.round >= self.max_rounds:
-            return
-
-        # Run ABM simulation step
-        if self._sim_topic == "Financial Scam":
-            abm_result = self.abm_simulator.simulate_scam_round()
-            self.scam_history.append(abm_result)
-            self.abm_results['believer_counts'].append(
-                sum(1 for x in abm_result if x)
-            )
-        else:
-            abm_result = self.abm_simulator.simulate_fake_news_round(
-                self.juiciness.get() / 100.0,
-                self._sim_topic_weight,
-                self._sim_topic_category,
-                self.intervention,
-                getattr(self, 'extra_rounds', False)
-            )
-            self.round_history.append(abm_result)
-            # Store the actual count of believers
-            believer_count = sum(1 for x in abm_result if x)
-            self.abm_results['believer_counts'].append(believer_count)
-
-        # Run PBM simulation step
-        if self.intervention:
-            self.pbm_simulator.adjust_rates(
-                self._sim_topic_weight,
-                self.juiciness.get() / 100.0,
-                True
-            )
-        susceptible, believers, immune = self.pbm_simulator.simulate_step()
-        self.pbm_results['susceptible'].append(susceptible)
-        self.pbm_results['believers'].append(believers)
-        self.pbm_results['immune'].append(immune)
-
-        # Update round counter and UI
-        self.round += 1
-        self.round_label.config(text=f"Round: {self.round}")
-        
-        if self.round >= self.max_rounds:
-            self.show_summary()
-            
-        self.update_graph()
-
-    def show_summary(self):
-        """Populate the embedded Summary and Comparison tabs in the main window.
-
-        This replaces the old popup windows and instead fills `self.tab_summary`
-        and `self.tab_comparison`. It then selects the Summary tab for the user.
-        """
-        # Prepare results data structures for the visualizer
-        history = self.scam_history if getattr(self, '_sim_topic', '') == "Financial Scam" else self.round_history
-        abm_results = {
-            'believer_counts': history,
-            'total_agents': len(self.abm_simulator.G.nodes()) if hasattr(self, 'abm_simulator') else 0
-        }
-        try:
-            pbm_results = self.pbm_simulator.get_history()
-        except Exception:
-            # fallback minimal structure
-            pbm_results = {
-                'susceptible': [0],
-                'believers': [0],
-                'immune': [0]
-            }
-
-        # Populate the Summary tab contents
-        try:
-            self._populate_summary_tab()
-        except Exception:
-            # best-effort: clear and show minimal message
-            for w in self.tab_summary.winfo_children():
-                w.destroy()
-            ttk.Label(self.tab_summary, text='Summary not available', font=('Segoe UI', 11)).pack(padx=8, pady=8)
-
-        # Populate the Comparison tab by embedding the ComparisonVisualizer
-        for w in self.tab_comparison.winfo_children():
-            w.destroy()
-        try:
-            from comparison_viz import ComparisonVisualizer
-            viz = ComparisonVisualizer(abm_results, pbm_results, self.context_text.get(), intervention_rounds=self.intervention_rounds)
-            comp_container = self._make_scrollable(self.tab_comparison)
-            viz.show_comparison(comp_container)
-        except Exception as e:
-            # Show error message inside the tab instead of raising
-            err_frame = ttk.Frame(self.tab_comparison)
-            err_frame.pack(fill='both', expand=True, padx=10, pady=10)
-            ttk.Label(err_frame, text='Failed to render comparison plots.', foreground='red').pack(anchor='w')
-            ttk.Label(err_frame, text=str(e)).pack(anchor='w')
-
-        # Switch to Summary tab for the user
-        try:
-            self.notebook.select(self.tab_summary)
-        except Exception:
-            pass
 
     def reset_simulation(self):
         """Reset the simulation state."""
