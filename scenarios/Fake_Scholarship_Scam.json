@@ -5,20 +5,18 @@
   "abm_csv": "Agent_profiles(50).csv",
   "juiciness": 75,
   "max_rounds": 24,
-  "intervention_round": 5,
+  "intervention_round": 8,
   "abm_sharing_params": {
     "share_belief_weight": 4.2,
-    "share_emotional_weight": 1.5,
-    "share_conf_weight": 1.0,
-    "share_juice_weight": 1.0,
-    "share_crit_var": 1.9,
-    "share_offset": -0.9,
+    "share_emotional_weight": 1.335,
+    "share_conf_weight": 0.9299999999999999,
+    "share_juice_weight": 1.11,
     "attribution_mode": "Weighted by source belief"
   },
   "pbm_rates": {
-    "contact_rate": 0.4,
-    "belief_rate": 0.3,
-    "recovery_rate": 0.1,
+    "contact_rate": 0.36400000000000005,
+    "belief_rate": 0.312,
+    "recovery_rate": 0.10500000000000001,
     "initial_believers": 5
   },
   "advanced_params": {

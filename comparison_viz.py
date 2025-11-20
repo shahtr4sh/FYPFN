@@ -246,9 +246,17 @@ class ComparisonVisualizer:
             self.abm_results['total_agents'] - abm_final_believers
         ]
         
+        # Get all final PBM counts
+        final_believers = int(self.pbm_results['believers'][-1])
+        final_susceptible = int(self.pbm_results['susceptible'][-1])
+        final_immune = int(self.pbm_results.get('immune', [0])[-1]) # Get 'immune', default to 0
+        
+        # Non-believers are both Susceptible AND Immune
+        final_non_believers = final_susceptible + final_immune
+        
         pbm_final = [
-            int(self.pbm_results['believers'][-1]),
-            int(self.pbm_results['susceptible'][-1])
+            final_believers,
+            final_non_believers
         ]
         
         # Create mini pie charts (donut style) and show percentages on both rings.

@@ -40,23 +40,39 @@ class PopulationSimulator:
         
     def adjust_rates(self, topic_weight: float, juice_factor: float, 
                     intervention: bool = False) -> None:
-        """Adjust transmission rates based on news properties."""
-        # Calculate new rates
-        base_contact = 0.4  # Base contact rate
-        base_belief = 0.3   # Base belief rate
+        """
+        Adjusts rates based on conditions.
+        This will respect user slider settings for contact/belief,
+        but will always apply intervention logic to the recovery rate.
+        """
         
-        # Topic and juiciness effects
-        topic_effect = max(0.1, min(0.8, topic_weight))
-        juice_effect = max(0.1, min(0.7, juice_factor))
+        # Check if contact_rate is still at its default (0.4)
+        # If not, the user's slider value is respected.
+        if round(self.rates.contact_rate, 2) == 0.40:
+            base_contact = 0.4
+            topic_effect = max(0.1, min(0.8, topic_weight))
+            self.rates.contact_rate = min(0.8, base_contact * (1 + 0.3 * topic_effect))
+
+        # Check if belief_rate is still at its default (0.3)
+        # If not, the user's slider value is respected.
+        if round(self.rates.belief_rate, 2) == 0.30:
+            base_belief = 0.3
+            juice_effect = max(0.1, min(0.7, juice_factor))
+            self.rates.belief_rate = min(0.7, base_belief * (1 + 0.4 * juice_effect))
         
-        # Calculate rates with more moderate effects
-        new_rates = SimulationRates(
-            contact_rate=min(0.8, base_contact * (1 + 0.3 * topic_effect)),
-            belief_rate=min(0.7, base_belief * (1 + 0.4 * juice_effect)),
-            recovery_rate=0.1 * (1.5 if intervention else 1.0)
-        )
+        # --- This is the key logic ---
+        # This function is called at the start (intervention=False)
+        # and again when the intervention hits (intervention=True).
         
-        self.rates = new_rates
+        if intervention:
+            # When the intervention hits, ALWAYS apply a recovery rate.
+            # This is what you find logical, and it is.
+            self.rates.recovery_rate = 0.1 * 1.5 # Apply 0.15 recovery
+        else:
+            # This runs at the start. If the rate is still the default 0.1,
+            # it sets it (before the sliders override it).
+            if round(self.rates.recovery_rate, 2) == 0.10:
+                 self.rates.recovery_rate = 0.1 * 1.0
         
     def simulate_step(self) -> Tuple[int, int, int]:
         """Run one step of the simulation using SIR model equations."""

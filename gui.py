@@ -611,9 +611,7 @@ class FakeNewsSimulatorGUI:
             
             val_calib = _calc_val(self.DEFAULTS['calibration_multiplier'], self.calibration_multiplier_pct_var)
 
-            # Your debug print can now check the calculated value
-            print(f"DEBUG: Reading pct={self.share_belief_pct_var.get()} -> final_val={val_belief}")
-
+            # Store a snapshot of the parameters used for this simulation
             self.simulation_params_snapshot = {
                 'abm_belief_weight': val_belief,
                 'abm_emotion_weight': val_emotion,
@@ -629,8 +627,6 @@ class FakeNewsSimulatorGUI:
                 'run_intervention': int(self.intervention_round_var.get()),
                 'run_calibration': val_calib
             }
-            
-            print(f"DEBUG: Snapshot created. Belief weight is: {self.simulation_params_snapshot['abm_belief_weight']}")
             
         except Exception as e:
             print(f"Warning: Could not create params snapshot. {e}")
