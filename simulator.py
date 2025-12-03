@@ -87,39 +87,38 @@ class FakeNewsSimulator:
             exposures = sum(shared.get(j, False) for j in neighbors)
             a = self.agent_states[i]
 
-            if extra_rounds or exposures == 0:
-                # Slower decay when some neighbors still believe
+            # --- FIX: Calculate P_believe first for everyone ---
+            # This ensures we always know their social pressure status
+            P_star = self._calculate_belief_probability(
+                a, weights, topic_weight, juice_factor
+            )
+            social_factor = (1 / (1 + np.exp(-exposure_alpha * exposures)))
+            exposure_factor = min(0.8, social_factor * (1 + 0.35 * juice_factor))
+            
+            fact_check_impact = gamma * a.get('fact_check_signal', 0.0) * (1.5 if intervention else 0.8)
+            P_believe = (exposure_factor * P_star) - fact_check_impact
+            P_believe = max(0.0, P_believe)
+
+            # --- FIX: Apply Probabilistic Recovery (Boredom) ---
+            # 5% chance per round to lose interest, mirroring PBM's recovery rate.
+            # This breaks the "Echo Chamber" loop.
+            if beliefs.get(i, 0.0) > theta_b and random.random() < 0.05:
+                new_beliefs[i] = 0.0
+                # Optional: Make them immune so they don't instantly rejoin
+                # self.agent_states[i]['immune'] = True 
+            
+            # If no exposure, force decay
+            elif extra_rounds or exposures == 0:
                 decay_modifier = max(0.6, 1.0 - (exposures / 8))
                 new_beliefs[i] = beliefs.get(i, 0.0) * np.exp(-lambda_decay * decay_modifier)
+            
+            # Standard Update Logic
+            elif P_believe > theta_b:
+                # Remove the +0.1 bonus to stop artificial boosting
+                new_beliefs[i] = min(0.95, P_believe) 
             else:
-                # Calculate base belief probability
-                P_star = self._calculate_belief_probability(
-                    a, weights, topic_weight, juice_factor
-                )
-
-                # Social influence increases with more believers
-                social_factor = (1 / (1 + np.exp(-exposure_alpha * exposures)))
-
-                # Exposure effect influenced by juice factor (reduced sensitivity)
-                exposure_factor = min(0.8, social_factor * (1 + 0.35 * juice_factor))
-
-                # Final belief probability with stronger fact-checking under intervention
-                fact_check_impact = gamma * a.get('fact_check_signal', 0.0) * (1.5 if intervention else 0.8)
-                P_believe = (exposure_factor * P_star) - fact_check_impact
-                # Keep probability non-negative
-                P_believe = max(0.0, P_believe)
-
-                # Update belief based on social dynamics
-                if P_believe > theta_b:
-                    # Stronger belief if many neighbors believe
-                    if exposures >= 3:
-                        new_beliefs[i] = min(1.0, P_believe + 0.1)
-                    else:
-                        new_beliefs[i] = min(0.9, P_believe)
-                else:
-                    # Gradual decay influenced by neighbors
-                    decay_modifier = max(0.5, 1.0 - (exposures / 10))
-                    new_beliefs[i] = beliefs.get(i, 0.0) * np.exp(-lambda_decay * decay_modifier)
+                decay_modifier = max(0.5, 1.0 - (exposures / 10))
+                new_beliefs[i] = beliefs.get(i, 0.0) * np.exp(-lambda_decay * decay_modifier)
 
         # Prepare transmission logging for this round
         transmissions = []  # list of (source, target)

@@ -756,22 +756,8 @@ class FakeNewsSimulatorGUI:
         is_scam = self._sim_topic == "Financial Scam"
         colors = self.abm_simulator.get_node_colors(is_scam)
         
-        # Calculate node positions (layout) - use a more expansive spring layout
-        # to spread nodes further apart for readability. Recompute on each
-        # visualization update to ensure the layout uses the chosen spacing.
-        try:
-            # Aggressively increase the optimal distance (k) and scale so nodes
-            # are placed much further apart. Increase iterations for stability.
-            self.pos = nx.spring_layout(
-                self.abm_simulator.G,
-                k=4.0,          # desired distance between nodes (larger = farther apart)
-                iterations=500,
-                scale=3.0,
-                seed=42
-            )
-        except Exception:
-            # Fallback to a simple layout on error
-            self.pos = nx.spring_layout(self.abm_simulator.G, seed=42)
+        # --- OPTIMIZATION: Use pre-calculated layout ---
+        self.pos = getattr(self, 'fixed_layout', nx.spring_layout(self.abm_simulator.G, seed=42))
             
         # Draw the ABM network with enhanced styling
         nx.draw_networkx_edges(self.abm_simulator.G,
@@ -1220,6 +1206,14 @@ class FakeNewsSimulatorGUI:
         # ABM must use the CSV agent profiles
         self.abm_simulator = FakeNewsSimulator(num_agents, self.df_agents)
         self.abm_simulator.seed_initial_state(is_scam=(self._sim_topic == "Financial Scam"))
+        # --- OPTIMIZATION: Calculate layout once ---
+        self.fixed_layout = nx.spring_layout(
+            self.abm_simulator.G,
+            k=4.0,          # Distance between nodes
+            iterations=500, # Physics simulation steps
+            scale=3.0,      # Size of the graph
+            seed=42         # Fixed seed for consistency
+        )
 
         # Apply ABM sharing model parameters from GUI controls (if present)
         try:
