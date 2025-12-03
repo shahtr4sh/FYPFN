@@ -343,40 +343,52 @@ class FakeNewsSimulatorGUI:
 
     def _create_relative_slider(self, parent_frame, text, percent_var, 
                                 default_value, min_percent=-100, max_percent=200, 
-                                format_str="{:.2f}"):
+                                format_str=".2f"):
         """
         Creates a slider that adjusts a percentage variable.
-        Uses the 'command' callback for stability (no 'trace').
+        Uses a trace to ensure the label updates even when setting values via code (scenarios).
         """
         ttk.Label(parent_frame, text=text, font=('Segoe UI', 10)).pack(anchor='w', padx=8)
         
         # This label will show the calculated value
         label_var = tk.StringVar()
         
-        # The callback function for the slider
-        def _on_slider_move(percent_str):
+        # Internal update function
+        def _update_label(*args):
             try:
-                percent = float(percent_str)
+                # Get value (works if arg is string from command or float from var)
+                try:
+                    percent = percent_var.get()
+                except:
+                    return
+
                 actual = default_value + (default_value * (percent / 100.0))
                 actual = max(0.0, actual)
                 
+                # Sanitize format string just in case curly braces were left in
+                fmt = format_str.replace("{", "").replace("}", "")
+                
                 # Update the label text
-                label_var.set(f"Value: {actual:{format_str}}  ({percent:+.0f}%)")
+                label_var.set(f"Value: {actual:{fmt}}  ({percent:+.0f}%)")
             except Exception:
                 label_var.set("Value: ---")
 
-        # Create the slider, binding to percent_var and using 'command'
+        # Create the slider
+        # We remove 'command' because the trace below handles EVERYTHING now.
         slider = tk.Scale(parent_frame, from_=min_percent, to=max_percent, orient=tk.HORIZONTAL,
-                          variable=percent_var, length=260, showvalue=1, resolution=1,
-                          command=_on_slider_move) # Use command, not trace
+                          variable=percent_var, length=260, showvalue=1, resolution=1)
         slider.pack(anchor='w', padx=8)
 
         # The label that displays the value
         label = ttk.Label(parent_frame, textvariable=label_var, font=('Segoe UI', 9))
         label.pack(anchor='w', padx=10, pady=(0, 8))
 
-        # Set the initial text
-        _on_slider_move(percent_var.get())
+        # --- THE FIX: Bind the variable changes to the label update ---
+        # This ensures that if you load a scenario (variable.set), the label updates too.
+        percent_var.trace_add('write', _update_label)
+
+        # Initialize text immediately
+        _update_label()
         
     def setup_ui(self):
         """Set up the user interface with a modern, streamlined layout.

@@ -3,9 +3,7 @@
 import numpy as np
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
-
-# PBM tuning constants
-MAX_NEW_BELIEVER_RATIO = 0.3  # maximum fraction of susceptibles that can convert in one step
+from config import MAX_NEW_BELIEVER_RATIO  # <-- IMPORTED FROM CONFIG
 
 @dataclass
 class SimulationRates:

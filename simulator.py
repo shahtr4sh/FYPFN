@@ -7,8 +7,11 @@ import numpy as np
 import networkx as nx
 import random
 import pandas as pd
-from config import (THETA_B, THETA_S, A, BASE_GAMMA, LAMBDA_DECAY,
-                    BETA1, BETA2, BETA3, BETA4, CATEGORY_TRAIT)
+from config import (THETA_B, THETA_S, BASE_GAMMA, LAMBDA_DECAY,
+                    BETA1, BETA2, BETA3, BETA4, CATEGORY_TRAIT,
+                    P_BASE_FLOOR, P_BASE_TOPIC, P_BASE_JUICE, T_INFLUENCE_JUICE,
+                    P_STAR_CAP, FC_GAMMA_MULT, FC_IMPACT_MULT, FC_BASE_MULT,
+                    SHARE_INT_PENALTY, BOREDOM_PROB)
 
 
 class FakeNewsSimulator:
@@ -67,8 +70,10 @@ class FakeNewsSimulator:
                                  intervention=False, extra_rounds=False):
         """Simulate one round of fake news spread."""
         nodes = list(self.G.nodes())
-        # Make intervention have a stronger fact-checking effect
-        gamma = BASE_GAMMA * (2.5 if intervention else 1.0)
+        
+        # USE CONSTANT: Fact-check gamma multiplier (FC_GAMMA_MULT)
+        gamma = BASE_GAMMA * (FC_GAMMA_MULT if intervention else 1.0)
+        
         shared = {i: self.agent_states[i]['shared'] for i in nodes}
         beliefs = {i: self.agent_states[i]['belief'] for i in nodes}
         new_beliefs = {}
@@ -87,22 +92,26 @@ class FakeNewsSimulator:
             exposures = sum(shared.get(j, False) for j in neighbors)
             a = self.agent_states[i]
 
-            # --- FIX: Calculate P_believe first for everyone ---
-            # This ensures we always know their social pressure status
+            # 1. Calculate P_star (Pre-social probability)
             P_star = self._calculate_belief_probability(
                 a, weights, topic_weight, juice_factor
             )
+            
+            # 2. Calculate Social Factor
             social_factor = (1 / (1 + np.exp(-exposure_alpha * exposures)))
             exposure_factor = min(0.8, social_factor * (1 + 0.35 * juice_factor))
             
-            fact_check_impact = gamma * a.get('fact_check_signal', 0.0) * (1.5 if intervention else 0.8)
+            # 3. Calculate Fact-Check Impact
+            # USE CONSTANTS: FC_IMPACT_MULT and FC_BASE_MULT
+            fact_check_impact = gamma * a.get('fact_check_signal', 0.0) * (FC_IMPACT_MULT if intervention else FC_BASE_MULT)
+            
+            # 4. Final Belief Probability
             P_believe = (exposure_factor * P_star) - fact_check_impact
             P_believe = max(0.0, P_believe)
 
-            # --- FIX: Apply Probabilistic Recovery (Boredom) ---
-            # 5% chance per round to lose interest, mirroring PBM's recovery rate.
-            # This breaks the "Echo Chamber" loop.
-            if beliefs.get(i, 0.0) > theta_b and random.random() < 0.05:
+            # --- Probabilistic Recovery (Boredom) ---
+            # USE CONSTANT: BOREDOM_PROB
+            if beliefs.get(i, 0.0) > theta_b and random.random() < BOREDOM_PROB:
                 new_beliefs[i] = 0.0
                 # Optional: Make them immune so they don't instantly rejoin
                 # self.agent_states[i]['immune'] = True 
@@ -124,23 +133,19 @@ class FakeNewsSimulator:
         transmissions = []  # list of (source, target)
 
         # Determine new belief and probabilistic sharing for each agent
-        # First record previous believer state to detect transitions
         prev_belief_flags = {i: (beliefs.get(i, 0.0) > theta_b) for i in nodes}
 
         # Update agent beliefs
-        # Apply smoothing/inertia and cap per-round belief changes to reduce volatility
         INERTIA = getattr(self, 'belief_inertia', 0.6)  # how much old belief persists (0..1)
         MAX_DELTA = getattr(self, 'max_belief_delta', 0.2)  # max allowed change per round
 
-        # If an agent was a believer and now falls below the belief threshold,
-        # mark them as immune (no longer susceptible) and force belief to 0.
+        # Immunity check
         for i in nodes:
             if prev_belief_flags.get(i, False) and new_beliefs.get(i, 0.0) <= theta_b:
                 self.agent_states[i]['immune'] = True
                 new_beliefs[i] = 0.0
 
         for i in nodes:
-            # If agent is immune, keep them non-believing and non-sharing
             if self.agent_states[i].get('immune', False):
                 self.agent_states[i]['belief'] = 0.0
                 self.agent_states[i]['shared'] = False
@@ -149,23 +154,17 @@ class FakeNewsSimulator:
             old_b = beliefs.get(i, 0.0)
             target_b = new_beliefs.get(i, 0.0)
             delta = target_b - old_b
-            # cap extreme jumps
-            if delta > MAX_DELTA:
-                delta = MAX_DELTA
-            elif delta < -MAX_DELTA:
-                delta = -MAX_DELTA
-            # smoothed update
+            if delta > MAX_DELTA: delta = MAX_DELTA
+            elif delta < -MAX_DELTA: delta = -MAX_DELTA
+            
             smoothed = old_b + (1.0 - INERTIA) * delta
-            # clamp to valid range
             self.agent_states[i]['belief'] = float(max(0.0, min(1.0, smoothed)))
 
-        # Compute probabilistic sharing based on updated belief and traits
-        # Sharing depends on new belief, emotional susceptibility, confirmation bias and juice
+        # Compute probabilistic sharing
         def _sig(x):
             return 1.0 / (1.0 + np.exp(-x))
 
-        # Coefficients (tunable) - read from instance attributes if provided, else use safer defaults
-        ALPHA = getattr(self, 'share_belief_weight', 3.0)   # weight for belief (reduced)
+        ALPHA = getattr(self, 'share_belief_weight', 3.0)
         BETA_EMO = getattr(self, 'share_emotional_weight', 1.2)
         BETA_CONF = getattr(self, 'share_confirmation_weight', 0.8)
         DELTA_JUICE = getattr(self, 'share_juice_weight', 0.8)
@@ -175,7 +174,6 @@ class FakeNewsSimulator:
         new_shared = {}
         for i in nodes:
             a = self.agent_states[i]
-            # use the smoothed/committed belief value for sharing decisions
             bval = self.agent_states[i].get('belief', 0.0)
             score = (ALPHA * bval
                      + BETA_EMO * a.get('emotional_susceptibility', 0.0)
@@ -184,27 +182,22 @@ class FakeNewsSimulator:
                      - ETA_CRIT * a.get('critical_thinking', 0.0)
                      + OFFSET)
             p_share = float(_sig(score))
-            # Tie sharing probability to committed belief to avoid high sharing from low-belief noise
             p_share = p_share * max(0.0, bval)
-            # If intervention is active, reduce sharing probability substantially
+            
+            # USE CONSTANT: SHARE_INT_PENALTY
             if intervention:
-                p_share *= 0.45
-            # sample stochastic sharing decision
+                p_share *= SHARE_INT_PENALTY
+            
             shared_decision = (random.random() < p_share)
             new_shared[i] = shared_decision
 
-        # Attribute new believers to sharers from previous shared set
+        # Attribute new believers
         for i in nodes:
             neigh = list(self.G.neighbors(i))
             became_believer = (not prev_belief_flags.get(i, False)) and (new_beliefs.get(i, 0.0) > theta_b)
             if became_believer:
-                # potential sources are neighbors who were sharing in the previous state
                 source_candidates = [j for j in neigh if shared.get(j, False)]
                 if source_candidates:
-                    # Attribution mode can be set on the simulator instance:
-                    # 'weighted' (default) - pick source weighted by previous belief
-                    # 'random' - pick a random sharer
-                    # 'first' - pick the first sharer in the neighbor list
                     mode = getattr(self, 'attribution_mode', 'weighted')
                     if mode == 'random':
                         src = random.choice(source_candidates)
@@ -223,11 +216,9 @@ class FakeNewsSimulator:
                             src = np.random.choice(source_candidates, p=probs)
                     transmissions.append((int(src), int(i)))
 
-        # Commit new shared flags into agent states
         for i, val in new_shared.items():
             self.agent_states[i]['shared'] = bool(val)
 
-        # Save transmissions into simulator state for inspection
         if not hasattr(self, 'transmission_history'):
             self.transmission_history = []
         self.transmission_history.append(transmissions)
@@ -284,18 +275,21 @@ class FakeNewsSimulator:
 
     def _calculate_belief_probability(self, agent, weights, topic_weight, juice_factor):
         """Calculate the probability of an agent believing the fake news."""
+        
+        # USE CONSTANT: T_INFLUENCE_JUICE
         trait_influence = (
             weights['confirmation_bias'] * agent.get('confirmation_bias', 0.5) +
-            weights['emotional_susceptibility'] * agent.get('emotional_susceptibility', 0.5) * (topic_weight + 0.2 * juice_factor) +
+            weights['emotional_susceptibility'] * agent.get('emotional_susceptibility', 0.5) * (topic_weight + T_INFLUENCE_JUICE * juice_factor) +
             weights['trust_level'] * agent.get('trust_level', 0.5)
         )
 
         resistance = weights['critical_thinking'] * agent.get('critical_thinking', 0.5)
 
-        # Base probability affected by news properties (reduced to make belief adoption less aggressive)
-        base_prob = 0.2 + (0.15 * topic_weight) + (0.10 * juice_factor)
+        # USE CONSTANTS: P_BASE_FLOOR, P_BASE_TOPIC, P_BASE_JUICE
+        base_prob = P_BASE_FLOOR + (P_BASE_TOPIC * topic_weight) + (P_BASE_JUICE * juice_factor)
 
-        return min(0.95, max(0.0, base_prob + trait_influence - resistance))
+        # USE CONSTANT: P_STAR_CAP
+        return min(P_STAR_CAP, max(0.0, base_prob + trait_influence - resistance))
 
     def simulate_scam_round(self):
         """Simulate one round of scam spread."""
