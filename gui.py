@@ -124,7 +124,7 @@ class FakeNewsSimulatorGUI:
 
         # Set up the UI
         self.setup_ui()
-
+        
     def _load_agent_data(self):
         """Load agent profiles from CSV."""
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -390,6 +390,32 @@ class FakeNewsSimulatorGUI:
         # Initialize text immediately
         _update_label()
         
+    def browse_agent_file(self):
+        """Allows user to select any CSV file from their computer."""
+        filename = filedialog.askopenfilename(
+            initialdir=os.getcwd(),
+            title="Select Agent Profile CSV",
+            filetypes=(("CSV files", "*.csv"), ("All files", "*.*"))
+        )
+        
+        if filename:
+            # 1. Store the full path for the simulation to use
+            self.abm_csv_var.set(filename)
+
+            # 2. Update the dropdown visual text to show the file name
+            short_name = os.path.basename(filename)
+            self.abm_csv_combo.set(short_name)
+            
+            # 3. Configure the combobox values to include this new file
+            current_values = list(self.abm_csv_combo.cget("values"))
+            if short_name not in current_values:
+                current_values.append(short_name)
+                self.abm_csv_combo.configure(values=current_values)
+                
+            # Reload data immediately
+            self._load_agent_data()
+            print(f"Loaded Agent File: {filename}")
+        
     def setup_ui(self):
         """Set up the user interface with a modern, streamlined layout.
 
@@ -432,16 +458,36 @@ class FakeNewsSimulatorGUI:
         self.context_entry = ttk.Entry(params_frame, textvariable=self.context_text, width=36)
         self.context_entry.pack(anchor='w', padx=8, pady=(0,6))
 
-        # ABM CSV chooser
+       # ABM CSV chooser
         ttk.Label(params_frame, text='ABM agent CSV:', font=default_font).pack(anchor='w', padx=8)
+        
+        # --- FIX: Create a container frame to hold dropdown + button side-by-side ---
+        csv_container = ttk.Frame(params_frame)
+        csv_container.pack(anchor='w', padx=8, pady=(0,6), fill='x')
+
         # populate CSV list
         script_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(script_dir, 'data')
-        csv_files = [f for f in os.listdir(data_dir) if f.lower().endswith('.csv')]
+        try:
+            csv_files = [f for f in os.listdir(data_dir) if f.lower().endswith('.csv')]
+        except FileNotFoundError:
+            csv_files = []
+            
         self.abm_csv_var.set(self.abm_csv_var.get() or (csv_files[0] if csv_files else ''))
-        self.abm_csv_combo = ttk.Combobox(params_frame, values=csv_files, textvariable=self.abm_csv_var, state='readonly', width=34)
-        self.abm_csv_combo.pack(anchor='w', padx=8, pady=(0,6))
+        
+        # Create Dropdown inside the container (Left side)
+        self.abm_csv_combo = ttk.Combobox(csv_container, values=csv_files, textvariable=self.abm_csv_var, state='readonly', width=25)
+        self.abm_csv_combo.pack(side='left', padx=(0, 5))
         self.abm_csv_combo.bind('<<ComboboxSelected>>', lambda e: self._load_agent_data())
+
+        # Create Browse Button inside the container (Right side)
+        self.btn_browse_csv = ttk.Button(
+            csv_container,
+            text="Browse...", 
+            width=8, 
+            command=self.browse_agent_file
+        )
+        self.btn_browse_csv.pack(side='left')
 
         # Scenario picker: load/save predefined scenarios from ./scenarios/*.json
         ttk.Label(params_frame, text='Scenario:', font=default_font).pack(anchor='w', padx=8)
@@ -529,9 +575,29 @@ class FakeNewsSimulatorGUI:
             self.calibration_multiplier_pct_var, default_value=self.DEFAULTS['calibration_multiplier'], 
             min_percent=-100, max_percent=200, format_str=".1f")
         
-        ttk.Label(params_frame, text='Intervention round:', font=default_font).pack(anchor='w', padx=8)
+        # --- NEW: Intervention Toggle & Spinbox ---
+        self.enable_intervention_var = tk.BooleanVar(value=True) # Default is ON
         self.intervention_round_var = tk.IntVar(value=5)
-        tk.Spinbox(params_frame, from_=0, to=1000, textvariable=self.intervention_round_var, width=12).pack(anchor='w', padx=8, pady=(0,8))
+
+        # Container for the checkbutton and spinbox
+        int_frame = ttk.Frame(params_frame)
+        int_frame.pack(fill='x', padx=8, pady=(0, 8))
+
+        # Function to enable/disable spinbox based on checkbox
+        def _toggle_intervention():
+            state = 'normal' if self.enable_intervention_var.get() else 'disabled'
+            self.int_spin.configure(state=state)
+
+        # The Checkbox
+        chk = ttk.Checkbutton(int_frame, text='Intervention at Round:', 
+                              variable=self.enable_intervention_var, 
+                              command=_toggle_intervention)
+        chk.pack(side='left')
+        
+        # The Spinbox (saved as self.int_spin so we can disable it)
+        self.int_spin = tk.Spinbox(int_frame, from_=0, to=1000, 
+                                   textvariable=self.intervention_round_var, width=6)
+        self.int_spin.pack(side='left', padx=(5,0))
         ttk.Label(params_frame, text='Max rounds:', font=default_font).pack(anchor='w', padx=8)
         self.max_rounds_var = tk.IntVar(value=self.max_rounds)
         tk.Spinbox(params_frame, from_=1, to=1000, textvariable=self.max_rounds_var, width=12).pack(anchor='w', padx=8, pady=(0,12))
@@ -636,7 +702,8 @@ class FakeNewsSimulatorGUI:
                 'pbm_recovery': val_pbm_recovery,
                 'pbm_initial': int(self.pbm_initial_believers_var.get()),
                 
-                'run_intervention': int(self.intervention_round_var.get()),
+                # Use a conditional expression to save -1 if disabled
+                'run_intervention': int(self.intervention_round_var.get()) if self.enable_intervention_var.get() else -1,
                 'run_calibration': val_calib
             }
             
@@ -688,18 +755,20 @@ class FakeNewsSimulatorGUI:
         if self.round >= self.max_rounds:
             return
         
-        # Apply intervention at configured round
-        int_round = int(self.intervention_round_var.get()) if hasattr(self, 'intervention_round_var') else 5
-        if self.round == int_round and not self.intervention:
-            self.intervention = True
-            self.intervention_rounds.append(self.round)
+        # --- FIX: Check if the checkbox is checked! ---
+        # Only run this logic if enable_intervention_var is True
+        if self.enable_intervention_var.get():
+            int_round = int(self.intervention_round_var.get())
+            if self.round == int_round and not self.intervention:
+                self.intervention = True
+                self.intervention_rounds.append(self.round)
             
         # Run the next round
         self.run_next_round()
         
         # Schedule the next round after a delay
-        if self.round < self.max_rounds:  # Double check we haven't hit max rounds
-            self.root.after(500, self.automate_rounds)  # Increased delay to 1 second for better visualization
+        if self.round < self.max_rounds:
+            self.root.after(500, self.automate_rounds)
 
     def run_next_round(self):
         """Run the next simulation round for both models."""

@@ -226,8 +226,10 @@ class ComparisonVisualizer:
         ax.set_title('Belief Spread Over Time: ABM vs PBM', pad=10)
         ax.set_xlabel('Round', fontsize=10)
         ax.set_ylabel('Number of Believers', fontsize=10)
-        # Draw intervention vertical lines (green dotted) if provided; default to round 5 if none
-        ivs = self.intervention_rounds if self.intervention_rounds else [5]
+        
+        # --- FIX: Only draw intervention line if self.intervention_rounds is not empty ---
+        ivs = self.intervention_rounds
+        
         first = True
         for r in ivs:
             # draw at integer round value
