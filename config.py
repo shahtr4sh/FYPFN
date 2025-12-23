@@ -79,22 +79,31 @@ CATEGORY_TRAIT = {
     "Health Scare": "emotional_susceptibility"   # Relies on pure fear/panic
 }
 
-# --- JUICINESS KEYWORDS (For Context Analysis) ---
-# Use this to score the "Juiciness" slider automatically based on context text
+# --- BALANCED JUICINESS KEYWORDS (config.py) ---
 JUICINESS_KEYWORDS = {
-    # High Impact (Score +20)
-    "URGENT": 20, "BREAKING": 20, "LEAKED": 20, "SECRET": 20, 
-    "WARNING": 20, "IMMEDIATE": 20, "DEADLY": 20, "CRISIS": 20,
-    "CONFIDENTIAL": 20, "BANNED": 20, "EXPOSED": 20,
+    # --- TIER 1: NUCLEAR / LIFE THREATENING (30 Points Each) ---
+    # Hit 3 of these and you're basically at 90-100%.
+    "EXPLOSION": 30, "BOMB": 30, "TERRORIST": 30, "SHOOTING": 30,
+    "DEADLY": 30, "DEATH": 30, "KILLED": 30, "SUICIDE": 30,
+    "COLLAPSE": 30, "VIRUS": 30, "PANDEMIC": 30, "OUTBREAK": 30,
+    "RAPE": 30, "MURDER": 30, "KIDNAP": 30, "HOSTAGE": 30, "HOSPITALIZED": 30,
 
-    # Medium Impact (Score +10)
-    "VIRAL": 10, "SHOCKING": 10, "MASSIVE": 10, "ATTACK": 10,
-    "SCANDAL": 10, "HIDDEN": 10, "RISK": 10, "DANGER": 10,
-    "ALERT": 10, "HACKED": 10, "INFECTED": 10,
+    # --- TIER 2: HIGH URGENCY / CRIME (15 Points Each) ---
+    "BREAKING": 15, "URGENT": 15, "WARNING": 15, "ALERT": 15,
+    "EMERGENCY": 15, "LOCKDOWN": 15, "EVACUATE": 15, "ARRESTED": 15,
+    "STOLEN": 15, "HACKED": 15, "SCAM": 15, "LEAKED": 15,
+    "BANKRUPT": 15, "RIGGED": 15, "CORRUPTION": 15, "SCANDAL": 15, "COVERUP": 15,
 
-    # Low Impact (Score +5)
-    "UPDATE": 5, "NOTICE": 5, "REPORT": 5, "NEW": 5,
-    "CHANGE": 5, "ISSUE": 5, "DELAY": 5
+    # --- TIER 3: ACADEMIC & ADMIN TRIGGERS (10 Points Each) ---
+    "BANNED": 10, "SUSPENDED": 10, "EXPELLED": 10, "FIRED": 10,
+    "CANCELLED": 10, "INCREASE": 10, "HIKE": 10, "CUT": 10,
+    "OFFICIAL": 10, "POLICE": 10, "MINISTRY": 10, "VC": 10,
+    "FREE": 10, "CASH": 10, "MONEY": 10, "GRANT": 10, "CLAIM": 10, "LINK": 10,
+
+    # --- TIER 4: CONTEXT FILLERS (5 Points Each) ---
+    "STUDENT": 5, "CAMPUS": 5, "HOSTEL": 5, "EXAM": 5, 
+    "RESULT": 5, "WIFI": 5, "SYSTEM": 5, "BUS": 5,
+    "MADANI": 5, "PTPTN": 5
 }
 
 # --- SIMULATION CONSTANTS (Matching Documentation) ---

@@ -607,9 +607,12 @@ class FakeNewsSimulatorGUI:
         btns.pack(fill='x', padx=8, pady=(6,12))
         self.run_btn = ttk.Button(btns, text='Run Simulation', command=self.init_simulation)
         self.run_btn.pack(side='left', expand=True, fill='x', padx=(0,6))
+        self.rerun_btn = ttk.Button(btns, text="Run Again", command=self.rerun_simulation, state="disabled")
+        self.rerun_btn.pack(side=tk.LEFT, padx=5)
         self.reset_btn = ttk.Button(btns, text='Reset', command=self.reset_simulation)
         self.reset_btn.pack(side='left', expand=True, fill='x')
         self.reset_btn.state(['disabled'])
+        
 
         # --- Center: tabbed visualization and summary ---
         center = ttk.Frame(main_pane)
@@ -752,7 +755,7 @@ class FakeNewsSimulatorGUI:
 
     def automate_rounds(self):
         """Automatically run simulation rounds."""
-        if self.round >= self.max_rounds:
+        if self.round > self.max_rounds:   # <--- Run UNTIL round is greater than max
             return
         
         # --- FIX: Check if the checkbox is checked! ---
@@ -772,7 +775,7 @@ class FakeNewsSimulatorGUI:
 
     def run_next_round(self):
         """Run the next simulation round for both models."""
-        if self.round >= self.max_rounds:
+        if self.round > self.max_rounds:   # <--- Run UNTIL round is greater than max
             return
 
         # Run ABM simulation step
@@ -1258,6 +1261,11 @@ class FakeNewsSimulatorGUI:
             for w in self.tab_summary.winfo_children():
                 w.destroy()
             ttk.Label(self.tab_summary, text='Summary not available', font=('Segoe UI', 11)).pack(padx=8, pady=8)
+            
+        # --- Enable Buttons at the end ---
+        self.run_btn.state(['!disabled'])   # Enable Run
+        self.reset_btn.state(['!disabled']) # Enable Reset
+        self.rerun_btn.state(['!disabled']) # <--- NEW: Enable Run Again
 
         # Populate the Comparison tab by embedding the ComparisonVisualizer
         for w in self.tab_comparison.winfo_children():
@@ -1440,16 +1448,100 @@ class FakeNewsSimulatorGUI:
         self.root.after(500, self.automate_rounds)
 
     def reset_simulation(self):
-        """Reset the simulation state."""
+        """Reset simulation state, sliders, text inputs, and file selections to default."""
+        
+        # 1. Reset Text Inputs
+        self.context_text.set("")  # Clear the Fake News Context
+        self.scenario_var.set("")  # Clear the selected Scenario name
+        self.scenario_combo.set("") # Clear the Scenario dropdown display
+        
+        # 2. Reset Agent Profile to Default (Smart Logic)
+        # We look for the file containing 'agent_profiles' again, just like startup
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(script_dir, "data")
+            csv_files = [f for f in os.listdir(data_dir) if f.lower().endswith('.csv')]
+            
+            default_file = None
+            for f in csv_files:
+                if 'agent_profiles' in f.lower():
+                    default_file = f
+                    break
+            
+            # If found, set it and load it
+            if default_file:
+                self.abm_csv_var.set(default_file)
+                self.abm_csv_combo.set(default_file)
+                self._load_agent_data() # Important: Actually reload the dataframe!
+        except Exception:
+            pass # Use whatever is currently loaded if this fails
+
+        # 3. Reset Sliders to 0.0
+        # PBM Sliders
+        self.pbm_contact_rate_pct_var.set(0.0)
+        self.pbm_belief_rate_pct_var.set(0.0)
+        self.pbm_recovery_rate_pct_var.set(0.0)
+        
+        # ABM Sliders
+        self.share_belief_pct_var.set(0.0)
+        self.share_emotion_pct_var.set(0.0)
+        self.share_conf_pct_var.set(0.0)
+        self.share_juice_pct_var.set(0.0)
+        
+        # Advanced Slider
+        self.calibration_multiplier_pct_var.set(0.0)
+        
+        # 4. Reset Simulation Logic State
         self.round = 0
-        self.max_rounds = 10
         try:
             self.reset_btn.state(['disabled'])
             self.run_btn.state(['!disabled'])
         except Exception:
             pass
+
+        # 5. Clear Visualization & Data
+        self.ax.clear()
+        self.ax.set_title("Fake News Spread - Round 0")
+        self.canvas.draw()
+        
+        self.round_label.config(text="Round: 0")
+        self.intervention = False
+        self.round_history = []
+        self.scam_history = []
+        self.intervention_rounds = []
+        
+        print("System fully reset to defaults.")
+        
+    def rerun_simulation(self):
+        """
+        Resets ONLY the simulation state (graph, rounds, history) 
+        but KEEPS the current parameters (sliders, text, scenario).
+        Then immediately triggers a new run.
+        """
+        print("Re-running simulation with current parameters...")
+
+        # 1. Reset Simulation State (Counters & Data)
+        self.round = 0
+        self.intervention = False
+        self.round_history = []
+        self.scam_history = []
+        self.intervention_rounds = []
+        
+        # Reset Result Dictionaries
+        self.abm_results = {'believer_counts': [], 'total_agents': 0}
+        self.pbm_results = {'susceptible': [], 'believers': [], 'immune': []}
+
+        # 2. Clear the Visualization
         self.ax.clear()
         self.ax.set_title("Fake News Spread - Round 0")
         self.canvas.draw()
         self.round_label.config(text="Round: 0")
-        self.intervention = False
+        
+        # 3. Disable buttons briefly (standard practice)
+        self.run_btn.state(['disabled'])
+        self.rerun_btn.state(['disabled'])
+        self.reset_btn.state(['disabled'])
+
+        # 4. Trigger the standard Run function
+        # This will pick up the current slider values/text automatically.
+        self.init_simulation()

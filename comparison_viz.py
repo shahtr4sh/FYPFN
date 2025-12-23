@@ -332,9 +332,15 @@ class ComparisonVisualizer:
         ax.legend(handles=legend_handles, loc='upper center', bbox_to_anchor=(0.5, -0.12), fontsize=9, borderaxespad=0., ncol=2)
         # expose wedges and labels for hover interaction
         try:
-            self._pie_wedges = list(wedges1) + list(wedges2)
-            self._pie_labels = [f'ABM believers: {abm_final[0]}', f'ABM non-believers: {abm_final[1]}',
-                                f'PBM believers: {pbm_final[0]}', f'PBM non-believers: {pbm_final[1]}']
+            # --- FIX: Store Inner (PBM) first, then Outer (ABM) ---
+            # We check PBM first so the Outer Ring doesn't "block" the hover event
+            self._pie_wedges = list(wedges2) + list(wedges1)
+            
+            # Match the labels to the new order (PBM first, then ABM)
+            self._pie_labels = [
+                f'PBM believers: {pbm_final[0]}', f'PBM non-believers: {pbm_final[1]}',
+                f'ABM believers: {abm_final[0]}', f'ABM non-believers: {abm_final[1]}'
+            ]
         except Exception:
             self._pie_wedges = []
             self._pie_labels = []

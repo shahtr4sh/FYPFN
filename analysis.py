@@ -9,39 +9,43 @@ from config import TOPICS, TOPIC_CATEGORIES, JUICINESS_KEYWORDS
 
 def analyze_context_juiciness(context_text):
     """
-    Calculates a 'Juiciness' score (0-100) based on the presence of viral keywords.
-    
-    Args:
-        context_text (str): The news headline or context string entered by the user.
-        
-    Returns:
-        int: A score between 0 and 100.
+    Calculates a BALANCED 'Juiciness' score (0-100).
+    - Tier 1 words (30pts) make it easy to reach high scores for serious topics.
+    - Tier 4 words ensure 'normal' news isn't 0%.
     """
     if not context_text:
-        return 50  # Default neutral score if empty
+        return 0
 
     text_upper = context_text.upper()
+    words = text_upper.split()
     score = 0
     
-    # 1. Base Score calculation using the Dictionary from config.py
-    # We iterate through every keyword in your new list
+    # 1. KEYWORD SCORING (Distinct Matches Only)
+    found_keywords = set()
+    
     for keyword, value in JUICINESS_KEYWORDS.items():
         if keyword in text_upper:
-            score += value
-            
-    # 2. Add bonus for exclamation marks (max +15)
-    exclamation_count = text_upper.count('!')
-    score += min(15, exclamation_count * 5)
-    
-    # 3. Add bonus for ALL CAPS words (simple heuristic)
-    # Splits text and counts words that are fully uppercase and longer than 3 letters
-    words = text_upper.split()
-    all_caps_count = sum(1 for w in words if w.isupper() and len(w) > 3)
-    score += min(20, all_caps_count * 5)
+            found_keywords.add((keyword, value))
 
-    # 4. Clamp the result between 0 and 100
-    # (We ensure it doesn't go below 10 or above 100)
-    final_score = max(10, min(100, score))
+    for kw, val in found_keywords:
+        score += val
+
+    # 2. FORMATTING BONUSES (Max 15 pts)
+    # Exclamation Marks: +3 per mark
+    exclamation_count = text_upper.count('!')
+    score += min(9, exclamation_count * 3)
+    
+    # CAPS LOCK: +2 per word (len > 3)
+    all_caps_count = sum(1 for w in words if w.isupper() and len(w) > 3)
+    score += min(6, all_caps_count * 2)
+    
+    # 3. CONTEXT BONUS (The "Punchy Headline" Bonus)
+    # If it's a short, urgent burst (5-15 words), give +5 points.
+    if 5 <= len(words) <= 15:
+        score += 5
+    
+    # 4. CLAMP (0 to 100)
+    final_score = max(0, min(100, score))
     
     return final_score
 
